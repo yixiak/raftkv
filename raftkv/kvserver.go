@@ -2,6 +2,8 @@ package raftkv
 
 import (
 	"context"
+	"math/rand"
+	"raftkv/debug"
 	"sync"
 	"time"
 )
@@ -49,4 +51,28 @@ func (rf *KVserver) RequestVote(ctx context.Context, args *RequestVoteArgs) (*Re
 	reply := RequestVoteReply{}
 
 	return &reply, nil
+}
+
+func (rf *KVserver) TobeLeader() {
+
+	rf.election_timeout.Reset(RandElectionTimeout())
+	if len(rf.logs) > 0 {
+		debug.Dlog("[Server %v] to be a leader with logs len: %v , term: %v and commitIndex: %v", rf.me, len(rf.logs), rf.currentTerm, rf.commitIndex)
+	}
+	rf.state = Leader
+	lastIndex := len(rf.logs)
+	for peer := range rf.nextIndex {
+		rf.nextIndex[peer] = int32(lastIndex)
+		rf.matchIndex[peer] = 0
+	}
+
+	//rf.SendheartbeatToAll()
+	rf.heartbeat_timeout.Reset(20 * time.Millisecond)
+}
+
+// generate a rand election time
+func RandElectionTimeout() time.Duration {
+	source := rand.NewSource(time.Now().UnixMicro())
+	ran := rand.New(source)
+	return time.Duration(500+ran.Int()%150) * time.Millisecond
 }
