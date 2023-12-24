@@ -4,7 +4,7 @@
 // - protoc             v4.25.1
 // source: rpc/kvrpc.proto
 
-package rpc
+package raftkv
 
 import (
 	context "context"
