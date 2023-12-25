@@ -6,6 +6,8 @@ import (
 	"raftkv/debug"
 	"sync"
 	"time"
+
+	grpc "google.golang.org/grpc"
 )
 
 type State int
@@ -25,7 +27,8 @@ type KVserver struct {
 	// peers record the index of client
 	// stubs is used to Calling service methods
 	peers []int
-	stubs []*raftKVClient
+	stubs []*RaftKVClient
+	addrs []string
 
 	state State
 
@@ -77,10 +80,48 @@ func (rf *KVserver) SendRequestVote(server int, args *RequestVoteArgs) (*Request
 
 // used to create a new server for RegisterRaftKVServer()
 func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver {
-	rf := KVserver{}
+	iniEntry := &LogEntry{
+		Term:  0,
+		Index: 0,
+	}
+	logs := make([]*LogEntry, 0)
+	logs = append(logs, iniEntry)
+
+	// connect to other servers
+	stubs := make([]*RaftKVClient, len(peers))
+	for peer := range peers {
+		if peer == me {
+			continue
+		}
+		conn, err := grpc.Dial(addrs[peer])
+		if err != nil {
+			panic("failed to create rpc connection")
+		}
+		stub := NewRaftKVClient(conn)
+		stubs[peer] = &stub
+	}
+
+	rf := &KVserver{
+		me:                int32(me),
+		peers:             peers,
+		addrs:             addrs,
+		state:             Follower,
+		logs:              logs,
+		stubs:             stubs,
+		currentTerm:       0,
+		votedFor:          -1,
+		commitIndex:       0,
+		lastApplied:       0,
+		nextIndex:         make([]int32, len(peers)),
+		matchIndex:        make([]int32, len(peers)),
+		election_timeout:  time.NewTimer(RandElectionTimeout()),
+		heartbeat_timeout: time.NewTimer(20 * time.Millisecond),
+		persist:           persist,
+		storage:           make(map[string]int32, 10),
+	}
 
 	go rf.ticker()
-	return &rf
+	return rf
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
