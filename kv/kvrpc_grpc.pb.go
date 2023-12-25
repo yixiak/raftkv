@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v4.25.1
-// source: rpc/kvrpc.proto
+// source: kvrpc.proto
 
-package raftkv
+package kv
 
 import (
 	context "context"
@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type RaftKVClient interface {
 	AppendEntries(ctx context.Context, in *AppendEntriesArgs, opts ...grpc.CallOption) (*AppendEntriesReply, error)
 	RequestVote(ctx context.Context, in *RequestVoteArgs, opts ...grpc.CallOption) (*RequestVoteReply, error)
+	Operate(ctx context.Context, in *Operation, opts ...grpc.CallOption) (*Opreturn, error)
 }
 
 type raftKVClient struct {
@@ -52,12 +53,22 @@ func (c *raftKVClient) RequestVote(ctx context.Context, in *RequestVoteArgs, opt
 	return out, nil
 }
 
+func (c *raftKVClient) Operate(ctx context.Context, in *Operation, opts ...grpc.CallOption) (*Opreturn, error) {
+	out := new(Opreturn)
+	err := c.cc.Invoke(ctx, "/RaftKV/Operate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaftKVServer is the server API for RaftKV service.
 // All implementations must embed UnimplementedRaftKVServer
 // for forward compatibility
 type RaftKVServer interface {
 	AppendEntries(context.Context, *AppendEntriesArgs) (*AppendEntriesReply, error)
 	RequestVote(context.Context, *RequestVoteArgs) (*RequestVoteReply, error)
+	Operate(context.Context, *Operation) (*Opreturn, error)
 	mustEmbedUnimplementedRaftKVServer()
 }
 
@@ -70,6 +81,9 @@ func (UnimplementedRaftKVServer) AppendEntries(context.Context, *AppendEntriesAr
 }
 func (UnimplementedRaftKVServer) RequestVote(context.Context, *RequestVoteArgs) (*RequestVoteReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestVote not implemented")
+}
+func (UnimplementedRaftKVServer) Operate(context.Context, *Operation) (*Opreturn, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Operate not implemented")
 }
 func (UnimplementedRaftKVServer) mustEmbedUnimplementedRaftKVServer() {}
 
@@ -120,6 +134,24 @@ func _RaftKV_RequestVote_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaftKV_Operate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Operation)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftKVServer).Operate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/RaftKV/Operate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftKVServer).Operate(ctx, req.(*Operation))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaftKV_ServiceDesc is the grpc.ServiceDesc for RaftKV service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -135,7 +167,11 @@ var RaftKV_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RequestVote",
 			Handler:    _RaftKV_RequestVote_Handler,
 		},
+		{
+			MethodName: "Operate",
+			Handler:    _RaftKV_Operate_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "rpc/kvrpc.proto",
+	Metadata: "kvrpc.proto",
 }

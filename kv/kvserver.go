@@ -1,4 +1,4 @@
-package raftkv
+package kv
 
 import (
 	"context"
@@ -19,9 +19,13 @@ const (
 type KVserver struct {
 	UnimplementedRaftKVServer
 
-	mu    sync.Mutex
-	me    int32
+	mu sync.Mutex
+	me int32
+
+	// peers record the index of client
+	// stubs is used to Calling service methods
 	peers []int
+	stubs []*raftKVClient
 
 	state State
 
@@ -38,9 +42,13 @@ type KVserver struct {
 	election_timeout  *time.Timer
 	heartbeat_timeout *time.Timer
 
+	// kv storage in memory
 	storage map[string]int32
+	// Persistence path
+	persist string
 }
 
+// rpc server's interface
 func (rf *KVserver) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*AppendEntriesReply, error) {
 	reply := AppendEntriesReply{}
 
@@ -53,8 +61,33 @@ func (rf *KVserver) RequestVote(ctx context.Context, args *RequestVoteArgs) (*Re
 	return &reply, nil
 }
 
-func (rf *KVserver) TobeLeader() {
+func (rf *KVserver) Operate(ctx context.Context, args *Operation) (*Opreturn, error) {
+	reply := Opreturn{}
 
+	return &reply, nil
+}
+
+// communicate with other servers
+func (rf *KVserver) SendAppendEntries(server int, args *AppendEntriesArgs) (*AppendEntriesReply, bool) {
+	return nil, true
+}
+func (rf *KVserver) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
+	return nil, true
+}
+
+// used to create a new server for RegisterRaftKVServer()
+func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver {
+	rf := KVserver{}
+
+	go rf.ticker()
+	return &rf
+}
+
+// The ticker go routine starts a new election if this peer hasn't received
+// heartsbeats recently, or send a heartbeat periodically if it is a Leader
+func (rf *KVserver) ticker() {}
+
+func (rf *KVserver) TobeLeader() {
 	rf.election_timeout.Reset(RandElectionTimeout())
 	if len(rf.logs) > 0 {
 		debug.Dlog("[Server %v] to be a leader with logs len: %v , term: %v and commitIndex: %v", rf.me, len(rf.logs), rf.currentTerm, rf.commitIndex)

@@ -1,10 +1,11 @@
 syntax = "proto3";
 
-option go_package = "../raftkv";
+option go_package = "../kv";
 
 service RaftKV{
     rpc AppendEntries (AppendEntriesArgs) returns (AppendEntriesReply){}
     rpc RequestVote (RequestVoteArgs) returns (RequestVoteReply){}
+    rpc Operate (Operation) returns (Opreturn) {}
 }
 
 message AppendEntriesArgs{
@@ -37,4 +38,14 @@ message logEntry{
     int32 index = 2;
     string key = 3;
     sint32 value = 4;
+}
+
+message Operation{
+    string  op = 1;
+    string key = 2;
+    sint32 value = 3;
+}
+
+message Opreturn{
+    bool success = 1;
 }
