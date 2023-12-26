@@ -4,7 +4,7 @@
 // - protoc             v4.25.1
 // source: kvrpc.proto
 
-package kv
+package kvnode
 
 import (
 	context "context"

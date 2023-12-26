@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "../kv";
+option go_package = "../kvnode";
 
 service RaftKV{
     rpc AppendEntries (AppendEntriesArgs) returns (AppendEntriesReply){}

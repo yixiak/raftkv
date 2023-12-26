@@ -1,4 +1,4 @@
-package kv
+package kvnode
 
 import (
 	"context"
@@ -18,7 +18,7 @@ const (
 	Leader    State = 2
 )
 
-type KVserver struct {
+type KVnode struct {
 	UnimplementedRaftKVServer
 
 	mu sync.Mutex
@@ -56,7 +56,7 @@ type KVserver struct {
 }
 
 // rpc server's interface
-func (rf *KVserver) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*AppendEntriesReply, error) {
+func (rf *KVnode) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*AppendEntriesReply, error) {
 	reply := &AppendEntriesReply{}
 	reply.Term = rf.currentTerm
 	reply.Success = false
@@ -118,7 +118,7 @@ func (rf *KVserver) AppendEntries(ctx context.Context, args *AppendEntriesArgs) 
 	return reply, nil
 }
 
-func (rf *KVserver) RequestVote(ctx context.Context, args *RequestVoteArgs) (*RequestVoteReply, error) {
+func (rf *KVnode) RequestVote(ctx context.Context, args *RequestVoteArgs) (*RequestVoteReply, error) {
 	reply := RequestVoteReply{}
 	//debug.Dlog("[Server %v] receive a RequestVote from %v with %v.term is %v, %v's term is %v\n\t\t\tand rf.lastApply is %v, args.lastlogIndex is %v", rf.me, args.CANDIDATEID, args.CANDIDATEID, args.TERM, rf.me, rf.currentTerm, rf.lastApplied, args.LASTLOGINDEX)
 	reply.Term = rf.currentTerm
@@ -150,7 +150,7 @@ func (rf *KVserver) RequestVote(ctx context.Context, args *RequestVoteArgs) (*Re
 	return &reply, nil
 }
 
-func (rf *KVserver) Operate(ctx context.Context, args *Operation) (*Opreturn, error) {
+func (rf *KVnode) Operate(ctx context.Context, args *Operation) (*Opreturn, error) {
 	reply := Opreturn{}
 
 	return &reply, nil
@@ -158,14 +158,14 @@ func (rf *KVserver) Operate(ctx context.Context, args *Operation) (*Opreturn, er
 
 // communicate with other servers
 // have question here
-func (rf *KVserver) SendAppendEntries(server int, args *AppendEntriesArgs) (*AppendEntriesReply, bool) {
+func (rf *KVnode) SendAppendEntries(server int, args *AppendEntriesArgs) (*AppendEntriesReply, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stub := NewRaftKVClient(rf.conns[server])
 	reply, succ := stub.AppendEntries(ctx, args)
 	return reply, succ == nil
 }
-func (rf *KVserver) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
+func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
 	debug.Dlog("[Server %v] is sending RequestVote to %v:%v", rf.me, server, rf.conns[server].Target())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -175,7 +175,7 @@ func (rf *KVserver) SendRequestVote(server int, args *RequestVoteArgs) (*Request
 }
 
 // used to create a new server for Register
-func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver {
+func newKVServer(me int, peers []int, addrs []string, persist string) *KVnode {
 	//debug.Dlog("[Server %v] enter newKVServer", me)
 	iniEntry := &LogEntry{
 		Term:  0,
@@ -200,7 +200,7 @@ func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 	// 	// stubs[peer] = &stub
 	// }
 
-	rf := &KVserver{
+	rf := &KVnode{
 		me:    int32(me),
 		peers: peers,
 		addrs: addrs,
@@ -227,7 +227,7 @@ func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 }
 
 // connect with other
-func (rf *KVserver) connect() {
+func (rf *KVnode) connect() {
 	//debug.Dlog("[Server %v] enter connect", rf.me)
 	//stubs := make([]*raftKVClient, len(peers))
 	for peer := range rf.peers {
@@ -250,7 +250,7 @@ func (rf *KVserver) connect() {
 
 // The ticker go routine starts a new election if this peer hasn't received
 // heartsbeats recently, or send a heartbeat periodically if it is a Leader
-func (rf *KVserver) ticker() {
+func (rf *KVnode) ticker() {
 	for !rf.killed {
 		//debug.Dlog("[Server %v] enter ticker", rf.me)
 		rf.mu.Lock()
@@ -278,7 +278,7 @@ func (rf *KVserver) ticker() {
 	}
 }
 
-func (rf *KVserver) StartElection() {
+func (rf *KVnode) StartElection() {
 	debug.Dlog("[Server %v] start an election event", rf.me)
 	rf.votedFor = rf.me
 	logLen := len(rf.logs)
@@ -339,7 +339,7 @@ func (rf *KVserver) StartElection() {
 	}
 }
 
-func (rf *KVserver) TobeLeader() {
+func (rf *KVnode) TobeLeader() {
 	rf.election_timeout.Reset(RandElectionTimeout())
 	if len(rf.logs) > 0 {
 		debug.Dlog("[Server %v] to be a leader with logs len: %v , term: %v and commitIndex: %v", rf.me, len(rf.logs), rf.currentTerm, rf.commitIndex)
@@ -355,7 +355,7 @@ func (rf *KVserver) TobeLeader() {
 	rf.heartbeat_timeout.Reset(20 * time.Millisecond)
 }
 
-func (rf *KVserver) SendheartbeatToAll() {
+func (rf *KVnode) SendheartbeatToAll() {
 	debug.Dlog("[Server %v] send heartbeat", rf.me)
 	if rf.state == Leader {
 		for server := range rf.peers {
@@ -426,7 +426,7 @@ func (rf *KVserver) SendheartbeatToAll() {
 	}
 }
 
-func (rf *KVserver) SendNewCommandToAll() {
+func (rf *KVnode) SendNewCommandToAll() {
 	debug.Dlog("[Server %v] is sending new command to others", rf.me)
 	commitNum := 1
 	commitNumLock := sync.Mutex{}
@@ -501,7 +501,7 @@ func RandElectionTimeout() time.Duration {
 	return time.Duration(400+ran.Int()%200) * time.Millisecond
 }
 
-func (rf *KVserver) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
+func (rf *KVnode) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
 	if rf.lastApplied == 0 {
 		return true
 	} else {
@@ -521,11 +521,11 @@ func (rf *KVserver) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
 	return true
 }
 
-func (rf *KVserver) isLeader() bool {
+func (rf *KVnode) isLeader() bool {
 	return rf.state == Leader
 }
 
-func (rf *KVserver) apply() {
+func (rf *KVnode) apply() {
 	for rf.commitIndex > rf.lastApplied && rf.lastApplied+1 < int32(len(rf.logs)) {
 		rf.lastApplied++
 		debug.Dlog("[Server %v] is applying %v: %+v", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])

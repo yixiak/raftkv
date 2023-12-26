@@ -1,4 +1,4 @@
-package kv
+package kvnode
 
 import (
 	"net"
@@ -21,7 +21,7 @@ func TestMake(t *testing.T) {
 	persist := "./temp"
 
 	grpcnode := make([]*grpc.Server, 3)
-	servers := make([]*KVserver, 3)
+	servers := make([]*KVnode, 3)
 	debug.Dlog("Testing Make:")
 	// should I make listeners here?
 	for index := 0; index < 3; index++ {
