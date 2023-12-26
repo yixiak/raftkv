@@ -11,9 +11,10 @@ service RaftKV{
 message AppendEntriesArgs{
     int32 term = 1;
     int32 leaderId = 2;
-    int32 prevLogTerm = 3;
-    int32 leaderCommit = 4;
-    repeated logEntry entries = 5;
+    int32 prevlogIndex = 3;
+    int32 prevLogTerm = 4;
+    int32 leaderCommit = 5;
+    repeated logEntry entries = 6;
 }
 
 message AppendEntriesReply{
