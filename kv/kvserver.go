@@ -126,7 +126,7 @@ func (rf *KVserver) RequestVote(ctx context.Context, args *RequestVoteArgs) (*Re
 	reply.VoteGranted = false
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	if rf.currentTerm > args.GetTerm() || (rf.currentTerm == args.GetTerm() && rf.votedFor != -1 && rf.votedFor != args.GetCandidateId() && rf.votedFor != rf.me) || !rf.isLogUptoDate(int(args.LastLogIndex), int(args.LastLogIndex)) {
+	if rf.currentTerm > args.GetTerm() || (rf.currentTerm == args.GetTerm() && rf.votedFor != -1 && rf.votedFor != args.GetCandidateId()) || !rf.isLogUptoDate(int(args.LastLogIndex), int(args.LastLogIndex)) {
 		// has voted to another Candidate
 		debug.Dlog("[Server %v] DO NOT vote to %v, rf.votedFor is %v", rf.me, args.CandidateId, rf.votedFor)
 		return &reply, nil
@@ -260,8 +260,9 @@ func (rf *KVserver) ticker() {
 		case <-rf.heartbeat_timeout.C:
 			rf.mu.Lock()
 			if currentstate == Leader {
+				debug.Dlog("[Server %v] send heart beart", rf.me)
 				// send heartbeat to all followers
-				// rf.SendheartbeatToAll()
+				rf.SendheartbeatToAll()
 				rf.heartbeat_timeout.Reset(20 * time.Millisecond)
 			}
 			rf.mu.Unlock()
@@ -350,15 +351,86 @@ func (rf *KVserver) TobeLeader() {
 		rf.matchIndex[peer] = 0
 	}
 
-	//rf.SendheartbeatToAll()
+	rf.SendheartbeatToAll()
 	rf.heartbeat_timeout.Reset(20 * time.Millisecond)
+}
+
+func (rf *KVserver) SendheartbeatToAll() {
+	debug.Dlog("[Server %v] send heartbeat", rf.me)
+	if rf.state == Leader {
+		for server := range rf.peers {
+			if server != int(rf.me) {
+				prevIndex := rf.nextIndex[server] - 1
+				debug.Dlog("[Server %v] send heartbeat to %v with prevIndex %v", rf.me, server, prevIndex)
+				if prevIndex < 0 {
+					debug.Dlog("[Server %v] don't send heartbeat to %v", rf.me, server)
+					continue
+				}
+				prevTerm := rf.logs[prevIndex].Term
+				entries := make([]*LogEntry, len(rf.logs)-int(prevIndex)-1)
+				copy(entries, rf.logs[prevIndex+1:])
+				args := &AppendEntriesArgs{
+					Term:         rf.currentTerm,
+					LeaderId:     rf.me,
+					Entries:      entries,
+					LeaderCommit: rf.commitIndex,
+					PrevlogIndex: prevIndex,
+					PrevLogTerm:  prevTerm,
+				}
+
+				go func(peer int) {
+					reply, succ := rf.SendAppendEntries(peer, args)
+					if succ {
+						if reply.Success {
+							rf.matchIndex[peer] = args.PrevlogIndex + int32(len(args.Entries))
+							rf.nextIndex[peer] = rf.matchIndex[peer] + 1
+							debug.Dlog("[Server %v] update %v nextIndex and matchIndex to %v %v", rf.me, peer, rf.nextIndex[peer], rf.matchIndex[peer])
+							// update the commit index
+
+							toCommit := make([]int, len(rf.logs))
+							for index := range rf.peers {
+								com := rf.matchIndex[index]
+								toCommit[com]++
+							}
+							peerLen := len(rf.peers)
+							// find the largest index which can be committed (at least larger than old commitIndex)
+							sum := 0
+							for i := len(toCommit) - 1; i > int(rf.commitIndex); i-- {
+								sum += toCommit[i]
+								if sum >= (1+peerLen)/2 {
+									rf.commitIndex = int32(i)
+									rf.apply()
+									debug.Dlog("[Server %v] commitIndex is %v", rf.me, rf.commitIndex)
+									break
+								}
+							}
+
+						} else {
+							// there is a client with larger term
+							if reply.GetTerm() > rf.currentTerm {
+								rf.state = Follower
+								rf.election_timeout.Reset(RandElectionTimeout())
+							} else {
+								// there is no matching entry
+								rf.nextIndex[peer] -= 1
+								debug.Dlog("[Server %v] update %v nextIndex to %v", rf.me, peer, rf.nextIndex[peer])
+							}
+						}
+					} else {
+						// Loss of connection
+						debug.Dlog("[Server %v] lost connection with %v", rf.me, peer)
+					}
+				}(server)
+			}
+		}
+	}
 }
 
 // generate a rand election time
 func RandElectionTimeout() time.Duration {
 	source := rand.NewSource(time.Now().UnixMicro())
 	ran := rand.New(source)
-	return time.Duration(500+ran.Int()%150) * time.Millisecond
+	return time.Duration(400+ran.Int()%200) * time.Millisecond
 }
 
 func (rf *KVserver) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
