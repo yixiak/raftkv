@@ -426,9 +426,77 @@ func (rf *KVserver) SendheartbeatToAll() {
 	}
 }
 
+func (rf *KVserver) SendNewCommandToAll() {
+	debug.Dlog("[Server %v] is sending new command to others", rf.me)
+	commitNum := 1
+	commitNumLock := sync.Mutex{}
+	oldCommit := rf.commitIndex
+	for server := range rf.peers {
+		if server == int(rf.me) {
+			continue
+		}
+		go func(peer int) {
+			prevterm := int32(0)
+			if rf.nextIndex[peer]-1 > 0 {
+				prevterm = rf.logs[rf.nextIndex[peer]-1].Term
+			}
+			entry := make([]*LogEntry, len(rf.logs[rf.nextIndex[peer]:]))
+			args := &AppendEntriesArgs{
+				Term:         rf.currentTerm,
+				LeaderId:     rf.me,
+				LeaderCommit: rf.commitIndex,
+				PrevlogIndex: rf.nextIndex[peer] - 1,
+				PrevLogTerm:  prevterm,
+				Entries:      entry,
+			}
+			copy(args.Entries, rf.logs[rf.nextIndex[peer]:])
+
+			debug.Dlog("[Server %v] the ENTRY with prevlogIndex %v for Server %v", rf.me, args.PrevlogIndex, peer)
+
+			reply, succ := rf.SendAppendEntries(peer, args)
+			if succ {
+
+				if reply.GetTerm() > rf.currentTerm {
+					rf.mu.Lock()
+					rf.currentTerm = reply.GetTerm()
+					rf.state = Follower
+					rf.election_timeout.Reset(RandElectionTimeout())
+					rf.votedFor = -1
+					rf.mu.Unlock()
+					return
+				}
+				if reply.Success {
+					rf.mu.Lock()
+					rf.matchIndex[peer] = args.PrevlogIndex + int32(len(args.Entries))
+					rf.nextIndex[peer] = rf.matchIndex[peer] + 1
+					debug.Dlog("[Server %v] update %v nextIndex and matchIndex to %v %v,and rf.commitIndex is %v，old is %v", rf.me, peer, rf.nextIndex[peer], rf.matchIndex[peer], rf.commitIndex, oldCommit)
+					commitNumLock.Lock()
+					commitNum++
+					if rf.commitIndex == oldCommit && commitNum >= (len(rf.peers)+1)/2 {
+						rf.commitIndex++
+						debug.Dlog("[Server %v] commit a new command with commitId %v: %+v", rf.me, rf.commitIndex, rf.logs[rf.commitIndex])
+						rf.apply()
+						rf.SendheartbeatToAll()
+						rf.heartbeat_timeout.Reset(20 * time.Millisecond)
+					}
+					commitNumLock.Unlock()
+					rf.mu.Unlock()
+				} else {
+					rf.mu.Lock()
+					rf.nextIndex[peer]--
+					debug.Dlog("[Server %v] update %v nextIndex to %v", rf.me, peer, rf.nextIndex[peer])
+					rf.mu.Unlock()
+				}
+			} else {
+				debug.Dlog("[Server %v] lost the connection with %v", rf.me, peer)
+			}
+		}(server)
+	}
+}
+
 // generate a rand election time
 func RandElectionTimeout() time.Duration {
-	source := rand.NewSource(time.Now().UnixMicro())
+	source := rand.NewSource(time.Now().Local().UnixMicro())
 	ran := rand.New(source)
 	return time.Duration(400+ran.Int()%200) * time.Millisecond
 }
@@ -457,4 +525,19 @@ func (rf *KVserver) isLeader() bool {
 	return rf.state == Leader
 }
 
-func (rf *KVserver) apply() {}
+func (rf *KVserver) apply() {
+	for rf.commitIndex > rf.lastApplied && rf.lastApplied+1 < int32(len(rf.logs)) {
+		rf.lastApplied++
+		debug.Dlog("[Server %v] is applying %v: %+v", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])
+		op := rf.logs[rf.lastApplied].GetOp()
+		key := rf.logs[rf.lastApplied].GetKey()
+		value := rf.logs[rf.lastApplied].GetValue()
+		switch op {
+		case "insert":
+		case "update":
+			rf.storage[key] = value
+		case "remove":
+			delete(rf.storage, key)
+		}
+	}
+}
