@@ -4,6 +4,7 @@ import (
 	"net"
 	"raftkv/debug"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 )
@@ -43,4 +44,5 @@ func TestMake(t *testing.T) {
 	for index := 0; index < 3; index++ {
 		servers[index].connect()
 	}
+	time.Sleep(1 * time.Minute)
 }

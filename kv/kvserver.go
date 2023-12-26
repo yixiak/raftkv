@@ -103,15 +103,18 @@ func (rf *KVserver) Operate(ctx context.Context, args *Operation) (*Opreturn, er
 // communicate with other servers
 // have question here
 func (rf *KVserver) SendAppendEntries(server int, args *AppendEntriesArgs) (*AppendEntriesReply, bool) {
-	ctx := new(context.Context)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	stub := NewRaftKVClient(rf.conns[server])
-	reply, succ := stub.AppendEntries(*ctx, args)
+	reply, succ := stub.AppendEntries(ctx, args)
 	return reply, succ == nil
 }
 func (rf *KVserver) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
-	ctx := new(context.Context)
+	debug.Dlog("[Server %v] is sending RequestVote to %v:%v", rf.me, server, rf.conns[server].Target())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	stub := NewRaftKVClient(rf.conns[server])
-	reply, succ := stub.RequestVote(*ctx, args)
+	reply, succ := stub.RequestVote(ctx, args)
 	return reply, succ == nil
 }
 
@@ -193,7 +196,7 @@ func (rf *KVserver) connect() {
 // heartsbeats recently, or send a heartbeat periodically if it is a Leader
 func (rf *KVserver) ticker() {
 	for !rf.killed {
-
+		debug.Dlog("[Server %v] enter ticker", rf.me)
 		rf.mu.Lock()
 		currentstate := rf.state
 		rf.mu.Unlock()
@@ -211,7 +214,7 @@ func (rf *KVserver) ticker() {
 			rf.currentTerm += 1
 			rf.state = Candidate
 			// start an election event
-			// rf.StartElection()
+			rf.StartElection()
 			rf.election_timeout.Reset(RandElectionTimeout())
 			rf.mu.Unlock()
 		}
