@@ -37,8 +37,9 @@ message RequestVoteReply{
 message logEntry{
     int32 term = 1;
     int32 index = 2;
-    string key = 3;
-    sint32 value = 4;
+    string op = 3;
+    string key = 4;
+    sint32 value = 5;
 }
 
 message Operation{
