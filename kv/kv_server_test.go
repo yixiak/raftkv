@@ -22,7 +22,7 @@ func TestMake(t *testing.T) {
 
 	grpcnode := make([]*grpc.Server, 3)
 	servers := make([]*KVserver, 3)
-	debug.Dlog("Testing Make")
+	debug.Dlog("Testing Make:")
 	// should I make listeners here?
 	for index := 0; index < 3; index++ {
 		server := newKVServer(index, peers, addrs, persist)
@@ -30,19 +30,16 @@ func TestMake(t *testing.T) {
 		if err != nil {
 			panic("listen failed")
 		}
-		debug.Dlog("Server %v Listening %v", index, addrs[index])
 		grpcSever := grpc.NewServer()
 		RegisterRaftKVServer(grpcSever, server)
 		// should run at another thread
 		go grpcSever.Serve(lis)
-		debug.Dlog("grpc Server %v Listening %v", index, addrs[index])
 		grpcnode[index] = grpcSever
 		servers[index] = server
-		debug.Dlog("Testing Make: make a grpcnode %v", index)
 
 	}
 	for index := 0; index < 3; index++ {
 		servers[index].connect()
 	}
-	time.Sleep(1 * time.Minute)
+	time.Sleep(10 * time.Second)
 }

@@ -57,9 +57,65 @@ type KVserver struct {
 
 // rpc server's interface
 func (rf *KVserver) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*AppendEntriesReply, error) {
-	reply := AppendEntriesReply{}
+	reply := &AppendEntriesReply{}
+	reply.Term = rf.currentTerm
+	reply.Success = false
+	if args.GetTerm() < reply.Term {
+		return reply, nil
+	}
+	if int(args.GetPrevlogIndex()) > len(rf.logs) {
+		debug.Dlog("[Server %v] return false to %v's AppendEntries for arg.prevlogindex %v > len(log)", rf.me, args.GetLeaderId(), args.GetPrevlogIndex())
+		return reply, nil
+	}
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	// Receiver implementation
+	prevLogIndex := args.GetPrevlogIndex()
+	if int(prevLogIndex) >= len(rf.logs) {
+		return reply, nil
+	}
+	if args.GetPrevlogIndex() >= 0 && rf.logs[args.GetPrevlogIndex()].Term != args.GetPrevLogTerm() {
+		debug.Dlog("[Server %v] Leader's term is different", rf.me)
+		return reply, nil
+	}
+	if len(args.Entries) == 0 {
+		// receive a heartbeat
+		debug.Dlog("[Server %v] receive a empty Entry from %v", rf.me, args.GetLeaderId())
+		rf.election_timeout.Reset(RandElectionTimeout())
+		reply.Success = true
+		// Leader update its commitIndex after commit itself
+		if args.GetLeaderCommit() > rf.commitIndex {
+			debug.Dlog("[Server %v] receive a LEADERCOMMIT %v ", rf.me, args.GetLeaderCommit())
+			if int(args.GetLeaderCommit()) > len(rf.logs)-1 {
+				rf.commitIndex = int32(len(rf.logs) - 1)
+			} else {
+				rf.commitIndex = args.GetLeaderCommit()
+			}
+			rf.apply()
+			debug.Dlog("[Server %v] update its commitIndex to %v ", rf.me, rf.commitIndex)
+		}
+		return reply, nil
+	}
+	rf.election_timeout.Reset(RandElectionTimeout())
+	debug.Dlog("[Server %v] receive appendentries with entry %+v. And currentTerm is %v, logs len is %v, committedIndex is: %v", rf.me, args.Entries[0], rf.currentTerm, len(rf.logs), rf.commitIndex)
 
-	return &reply, nil
+	rf.logs = rf.logs[:prevLogIndex+1]
+	rf.logs = append(rf.logs, args.Entries...)
+	debug.Dlog("[Server %v]'s loglen is %v after append", rf.me, len(rf.logs))
+	if args.GetLeaderCommit() > rf.commitIndex {
+		debug.Dlog("[Server %v]'s commit Index is less then Leader's", rf.me)
+		if int(args.GetLeaderCommit()) > len(rf.logs)-1 {
+			rf.commitIndex = int32(len(rf.logs) - 1)
+		} else {
+			rf.commitIndex = args.GetLeaderCommit()
+		}
+		rf.apply()
+	}
+
+	debug.Dlog("[Server %v]'s commited Index is %v", rf.me, rf.commitIndex)
+	debug.Dlog("[Server %v]'s lastapplied log is %+v now", rf.me, rf.logs[rf.commitIndex])
+	reply.Success = true
+	return reply, nil
 }
 
 func (rf *KVserver) RequestVote(ctx context.Context, args *RequestVoteArgs) (*RequestVoteReply, error) {
@@ -120,7 +176,7 @@ func (rf *KVserver) SendRequestVote(server int, args *RequestVoteArgs) (*Request
 
 // used to create a new server for Register
 func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver {
-	debug.Dlog("[Server %v] enter newKVServer", me)
+	//debug.Dlog("[Server %v] enter newKVServer", me)
 	iniEntry := &LogEntry{
 		Term:  0,
 		Index: 0,
@@ -172,7 +228,7 @@ func newKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 
 // connect with other
 func (rf *KVserver) connect() {
-	debug.Dlog("[Server %v] enter connect", rf.me)
+	//debug.Dlog("[Server %v] enter connect", rf.me)
 	//stubs := make([]*raftKVClient, len(peers))
 	for peer := range rf.peers {
 		if peer == int(rf.me) {
@@ -196,7 +252,7 @@ func (rf *KVserver) connect() {
 // heartsbeats recently, or send a heartbeat periodically if it is a Leader
 func (rf *KVserver) ticker() {
 	for !rf.killed {
-		debug.Dlog("[Server %v] enter ticker", rf.me)
+		//debug.Dlog("[Server %v] enter ticker", rf.me)
 		rf.mu.Lock()
 		currentstate := rf.state
 		rf.mu.Unlock()
@@ -324,3 +380,9 @@ func (rf *KVserver) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
 	}
 	return true
 }
+
+func (rf *KVserver) isLeader() bool {
+	return rf.state == Leader
+}
+
+func (rf *KVserver) apply() {}
