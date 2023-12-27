@@ -7,8 +7,12 @@ package kvserver
 
 import (
 	"fmt"
+	"net"
+	"raftkv/debug"
 	"raftkv/kvnode"
 	"sync"
+
+	"google.golang.org/grpc"
 )
 
 type KVserver struct {
@@ -34,18 +38,29 @@ type OpMsg struct {
 func NewKVServer(me int, peers []int, addrs []string, persist string) *KVserver {
 
 	applych := make(chan kvnode.ApplyMsg)
+	debug.Dlog("[Server %v] is making node", me)
 	inner := kvnode.NewKVnode(me, peers, addrs, applych)
-
 	kvServer := &KVserver{
 		me:        int32(me),
 		node:      inner,
 		applychan: applych,
 		killed:    false,
 	}
+	//go kvServer.ticker()
+
+	lis, err := net.Listen("tcp", addrs[me])
+	if err != nil {
+		panic("listen failed")
+	}
+	grpcSever := grpc.NewServer()
+	kvnode.RegisterRaftKVServer(grpcSever, inner)
+	// should run at another thread
+	go grpcSever.Serve(lis)
 	return kvServer
 }
 
 func (server *KVserver) Connect() {
+	debug.Dlog("[Server ] is connecting with others")
 	server.node.Connect()
 	go server.ticker()
 }
@@ -55,6 +70,7 @@ func (server *KVserver) IsLeader() bool {
 }
 
 func (kv *KVserver) Exec(ch chan OpMsg, op string, key string, value int32) {
+	debug.Dlog("[Server %v] receive a op request : %v %v", kv.me, op, key)
 
 	index, term, isleader := kv.node.Exec(op, key, value)
 	if index != -1 && term != -1 && isleader {

@@ -72,7 +72,7 @@ func (rf *KVnode) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*
 		return reply, nil
 	}
 	if int(args.GetPrevlogIndex()) > len(rf.logs) {
-		debug.Dlog("[Server %v] return false to %v's AppendEntries for arg.prevlogindex %v > len(log)", rf.me, args.GetLeaderId(), args.GetPrevlogIndex())
+		debug.Dlog("[Node %v] return false to %v's AppendEntries for arg.prevlogindex %v > len(log)", rf.me, args.GetLeaderId(), args.GetPrevlogIndex())
 		return reply, nil
 	}
 	rf.mu.Lock()
@@ -83,35 +83,35 @@ func (rf *KVnode) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*
 		return reply, nil
 	}
 	if args.GetPrevlogIndex() >= 0 && rf.logs[args.GetPrevlogIndex()].Term != args.GetPrevLogTerm() {
-		debug.Dlog("[Server %v] Leader's term is different", rf.me)
+		debug.Dlog("[Node %v] Leader's term is different", rf.me)
 		return reply, nil
 	}
 	if len(args.Entries) == 0 {
 		// receive a heartbeat
-		debug.Dlog("[Server %v] receive a empty Entry from %v", rf.me, args.GetLeaderId())
+		debug.Dlog("[Node %v] receive a empty Entry from %v", rf.me, args.GetLeaderId())
 		rf.election_timeout.Reset(RandElectionTimeout())
 		reply.Success = true
 		// Leader update its commitIndex after commit itself
 		if args.GetLeaderCommit() > rf.commitIndex {
-			debug.Dlog("[Server %v] receive a LEADERCOMMIT %v ", rf.me, args.GetLeaderCommit())
+			debug.Dlog("[Node %v] receive a LEADERCOMMIT %v ", rf.me, args.GetLeaderCommit())
 			if int(args.GetLeaderCommit()) > len(rf.logs)-1 {
 				rf.commitIndex = int32(len(rf.logs) - 1)
 			} else {
 				rf.commitIndex = args.GetLeaderCommit()
 			}
 			rf.apply()
-			debug.Dlog("[Server %v] update its commitIndex to %v ", rf.me, rf.commitIndex)
+			debug.Dlog("[Node %v] update its commitIndex to %v ", rf.me, rf.commitIndex)
 		}
 		return reply, nil
 	}
 	rf.election_timeout.Reset(RandElectionTimeout())
-	debug.Dlog("[Server %v] receive appendentries with entry %+v. And currentTerm is %v, logs len is %v, committedIndex is: %v", rf.me, args.Entries[0], rf.currentTerm, len(rf.logs), rf.commitIndex)
+	debug.Dlog("[Node %v] receive appendentries with entry %+v. And currentTerm is %v, logs len is %v, committedIndex is: %v", rf.me, args.Entries[0], rf.currentTerm, len(rf.logs), rf.commitIndex)
 
 	rf.logs = rf.logs[:prevLogIndex+1]
 	rf.logs = append(rf.logs, args.Entries...)
-	debug.Dlog("[Server %v]'s loglen is %v after append", rf.me, len(rf.logs))
+	//debug.Dlog("[Node %v]'s loglen is %v after append", rf.me, len(rf.logs))
 	if args.GetLeaderCommit() > rf.commitIndex {
-		debug.Dlog("[Server %v]'s commit Index is less then Leader's", rf.me)
+		debug.Dlog("[Node %v]'s commit Index is less then Leader's", rf.me)
 		if int(args.GetLeaderCommit()) > len(rf.logs)-1 {
 			rf.commitIndex = int32(len(rf.logs) - 1)
 		} else {
@@ -120,15 +120,14 @@ func (rf *KVnode) AppendEntries(ctx context.Context, args *AppendEntriesArgs) (*
 		rf.apply()
 	}
 
-	debug.Dlog("[Server %v]'s commited Index is %v", rf.me, rf.commitIndex)
-	debug.Dlog("[Server %v]'s lastapplied log is %+v now", rf.me, rf.logs[rf.commitIndex])
+	debug.Dlog("[Node %v]'s lastapplied log is %+v ,commited Index is %v", rf.me, rf.logs[rf.commitIndex], rf.commitIndex)
 	reply.Success = true
 	return reply, nil
 }
 
 func (rf *KVnode) RequestVote(ctx context.Context, args *RequestVoteArgs) (*RequestVoteReply, error) {
 	reply := RequestVoteReply{}
-	//debug.Dlog("[Server %v] receive a RequestVote from %v with %v.term is %v, %v's term is %v\n\t\t\tand rf.lastApply is %v, args.lastlogIndex is %v", rf.me, args.CANDIDATEID, args.CANDIDATEID, args.TERM, rf.me, rf.currentTerm, rf.lastApplied, args.LASTLOGINDEX)
+	//debug.Dlog("[Node %v] receive a RequestVote from %v with %v.term is %v, %v's term is %v\n\t\t\tand rf.lastApply is %v, args.lastlogIndex is %v", rf.me, args.CANDIDATEID, args.CANDIDATEID, args.TERM, rf.me, rf.currentTerm, rf.lastApplied, args.LASTLOGINDEX)
 	reply.Term = rf.currentTerm
 	// Default not to vote
 	reply.VoteGranted = false
@@ -136,7 +135,7 @@ func (rf *KVnode) RequestVote(ctx context.Context, args *RequestVoteArgs) (*Requ
 	defer rf.mu.Unlock()
 	if rf.currentTerm > args.GetTerm() || (rf.currentTerm == args.GetTerm() && rf.votedFor != -1 && rf.votedFor != args.GetCandidateId()) || !rf.isLogUptoDate(int(args.LastLogIndex), int(args.LastLogIndex)) {
 		// has voted to another Candidate
-		debug.Dlog("[Server %v] DO NOT vote to %v, rf.votedFor is %v", rf.me, args.CandidateId, rf.votedFor)
+		debug.Dlog("[Node %v] DO NOT vote to %v, rf.votedFor is %v", rf.me, args.CandidateId, rf.votedFor)
 		return &reply, nil
 	}
 	if rf.currentTerm <= args.Term {
@@ -145,7 +144,7 @@ func (rf *KVnode) RequestVote(ctx context.Context, args *RequestVoteArgs) (*Requ
 				return &reply, nil
 			}
 		}
-		debug.Dlog("[Server %v] vote to %v", rf.me, args.CandidateId)
+		debug.Dlog("[Node %v] vote to %v", rf.me, args.CandidateId)
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
 		rf.currentTerm = args.Term
@@ -174,7 +173,7 @@ func (rf *KVnode) SendAppendEntries(server int, args *AppendEntriesArgs) (*Appen
 	return reply, succ == nil
 }
 func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
-	debug.Dlog("[Server %v] is sending RequestVote to %v:%v", rf.me, server, rf.conns[server].Target())
+	debug.Dlog("[Node %v] is sending RequestVote to %v:%v", rf.me, server, rf.conns[server].Target())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	stub := NewRaftKVClient(rf.conns[server])
@@ -184,7 +183,7 @@ func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVo
 
 // used to create a new server for Register
 func NewKVnode(me int, peers []int, addrs []string, applych chan ApplyMsg) *KVnode {
-	//debug.Dlog("[Server %v] enter newKVServer", me)
+	debug.Dlog("[Node %v] enter newKVServer", me)
 	iniEntry := &LogEntry{
 		Term:  0,
 		Index: 0,
@@ -194,19 +193,6 @@ func NewKVnode(me int, peers []int, addrs []string, applych chan ApplyMsg) *KVno
 
 	// connect to other servers
 	conns := make([]*grpc.ClientConn, len(peers))
-	// //stubs := make([]*raftKVClient, len(peers))
-	// for peer := range peers {
-	// 	if peer == me {
-	// 		continue
-	// 	}
-	// 	conn, err := grpc.Dial(addrs[peer])
-	// 	conns[peer] = conn
-	// 	if err != nil {
-	// 		panic("failed to create rpc connection")
-	// 	}
-	// 	// stub := raftKVClient(NewRaftKVClient(conn))
-	// 	// stubs[peer] = &stub
-	// }
 
 	rf := &KVnode{
 		me:    int32(me),
@@ -224,26 +210,24 @@ func NewKVnode(me int, peers []int, addrs []string, applych chan ApplyMsg) *KVno
 		matchIndex:        make([]int32, len(peers)),
 		election_timeout:  time.NewTimer(RandElectionTimeout()),
 		heartbeat_timeout: time.NewTimer(20 * time.Millisecond),
-		// persist:           persist,
-		// storage:           make(map[string]int32, 10),
-		applych: applych,
-		killed:  false,
+		applych:           applych,
+		killed:            false,
 	}
 
 	//go rf.ticker()
-	debug.Dlog("[Server %v] finished newKVnode", me)
+	debug.Dlog("[Node %v] finished newKVnode", me)
 	return rf
 }
 
 // connect with other
 func (rf *KVnode) Connect() {
-	//debug.Dlog("[Server %v] enter connect", rf.me)
+	//debug.Dlog("[Node %v] enter connect", rf.me)
 	//stubs := make([]*raftKVClient, len(peers))
 	for peer := range rf.peers {
 		if peer == int(rf.me) {
 			continue
 		}
-		debug.Dlog("[Server %v] is connecting with %v in %v", rf.me, peer, rf.addrs[peer])
+		debug.Dlog("[Node %v] is connecting with %v in %v", rf.me, peer, rf.addrs[peer])
 		conn, err := grpc.Dial(rf.addrs[peer], grpc.WithInsecure())
 		rf.conns[peer] = conn
 		if err != nil {
@@ -254,14 +238,14 @@ func (rf *KVnode) Connect() {
 	}
 	time.Sleep(10 * time.Millisecond)
 	go rf.ticker()
-	debug.Dlog("[Server %v] connect with others", rf.me)
+	debug.Dlog("[Node %v] connect with others", rf.me)
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
 // heartsbeats recently, or send a heartbeat periodically if it is a Leader
 func (rf *KVnode) ticker() {
 	for !rf.killed {
-		//debug.Dlog("[Server %v] enter ticker", rf.me)
+		//debug.Dlog("[Node %v] enter ticker", rf.me)
 		rf.mu.Lock()
 		currentstate := rf.state
 		rf.mu.Unlock()
@@ -269,7 +253,7 @@ func (rf *KVnode) ticker() {
 		case <-rf.heartbeat_timeout.C:
 			rf.mu.Lock()
 			if currentstate == Leader {
-				debug.Dlog("[Server %v] send heart beart", rf.me)
+				//debug.Dlog("[Node %v] send heart beart", rf.me)
 				// send heartbeat to all followers
 				rf.SendheartbeatToAll()
 				rf.heartbeat_timeout.Reset(20 * time.Millisecond)
@@ -288,7 +272,7 @@ func (rf *KVnode) ticker() {
 }
 
 func (rf *KVnode) StartElection() {
-	debug.Dlog("[Server %v] start an election event", rf.me)
+	debug.Dlog("[Node %v] start an election event", rf.me)
 	rf.votedFor = rf.me
 	logLen := len(rf.logs)
 	agreeNum := 1 // itself
@@ -316,23 +300,23 @@ func (rf *KVnode) StartElection() {
 					defer rf.mu.Unlock()
 					if rf.currentTerm == args.GetTerm() && rf.state == Candidate {
 
-						//debug.Dlog("[Server %v] Receive reply from %v", rf.me, peer)
+						//debug.Dlog("[Node %v] Receive reply from %v", rf.me, peer)
 						if reply.GetVoteGranted() {
 							// get a vote
-							debug.Dlog("[Server %v] get a vote from %v", rf.me, peer)
+							debug.Dlog("[Node %v] get a vote from %v", rf.me, peer)
 							agreeNumLock.Lock()
 							agreeNum++
 
 							// win this election and then send heartbeat, interrupt sending election message
 							if agreeNum >= (len(rf.peers)+1)/2 {
-								debug.Dlog("[Server %v] become a new leader", rf.me)
+								debug.Dlog("[Node %v] become a new leader", rf.me)
 								rf.TobeLeader()
 							}
 							agreeNumLock.Unlock()
 							return
 						} else if reply.GetTerm() > rf.currentTerm {
 							// find another Candidate/leader
-							//debug.Dlog("[Server %v] find a larger term from %v", rf.me, peer)
+							//debug.Dlog("[Node %v] find a larger term from %v", rf.me, peer)
 							//rf.mu.Lock()
 							//defer rf.mu.Unlock()
 							rf.currentTerm = reply.GetTerm()
@@ -351,7 +335,7 @@ func (rf *KVnode) StartElection() {
 func (rf *KVnode) TobeLeader() {
 	rf.election_timeout.Reset(RandElectionTimeout())
 	if len(rf.logs) > 0 {
-		debug.Dlog("[Server %v] to be a leader with logs len: %v , term: %v and commitIndex: %v", rf.me, len(rf.logs), rf.currentTerm, rf.commitIndex)
+		debug.Dlog("[Node %v] to be a leader with logs len: %v , term: %v and commitIndex: %v", rf.me, len(rf.logs), rf.currentTerm, rf.commitIndex)
 	}
 	rf.state = Leader
 	lastIndex := len(rf.logs)
@@ -365,14 +349,14 @@ func (rf *KVnode) TobeLeader() {
 }
 
 func (rf *KVnode) SendheartbeatToAll() {
-	debug.Dlog("[Server %v] send heartbeat", rf.me)
+	debug.Dlog("[Node %v] send heartbeat", rf.me)
 	if rf.state == Leader {
 		for server := range rf.peers {
 			if server != int(rf.me) {
 				prevIndex := rf.nextIndex[server] - 1
-				debug.Dlog("[Server %v] send heartbeat to %v with prevIndex %v", rf.me, server, prevIndex)
+				debug.Dlog("[Node %v] send heartbeat to %v with prevIndex %v", rf.me, server, prevIndex)
 				if prevIndex < 0 {
-					debug.Dlog("[Server %v] don't send heartbeat to %v", rf.me, server)
+					debug.Dlog("[Node %v] don't send heartbeat to %v", rf.me, server)
 					continue
 				}
 				prevTerm := rf.logs[prevIndex].Term
@@ -393,7 +377,7 @@ func (rf *KVnode) SendheartbeatToAll() {
 						if reply.Success {
 							rf.matchIndex[peer] = args.PrevlogIndex + int32(len(args.Entries))
 							rf.nextIndex[peer] = rf.matchIndex[peer] + 1
-							debug.Dlog("[Server %v] update %v nextIndex and matchIndex to %v %v", rf.me, peer, rf.nextIndex[peer], rf.matchIndex[peer])
+							debug.Dlog("[Node %v] update %v nextIndex and matchIndex to %v %v", rf.me, peer, rf.nextIndex[peer], rf.matchIndex[peer])
 							// update the commit index
 
 							toCommit := make([]int, len(rf.logs))
@@ -409,7 +393,7 @@ func (rf *KVnode) SendheartbeatToAll() {
 								if sum >= (1+peerLen)/2 {
 									rf.commitIndex = int32(i)
 									rf.apply()
-									debug.Dlog("[Server %v] commitIndex is %v", rf.me, rf.commitIndex)
+									debug.Dlog("[Node %v] commitIndex is %v", rf.me, rf.commitIndex)
 									break
 								}
 							}
@@ -422,12 +406,12 @@ func (rf *KVnode) SendheartbeatToAll() {
 							} else {
 								// there is no matching entry
 								rf.nextIndex[peer] -= 1
-								debug.Dlog("[Server %v] update %v nextIndex to %v", rf.me, peer, rf.nextIndex[peer])
+								debug.Dlog("[Node %v] update %v nextIndex to %v", rf.me, peer, rf.nextIndex[peer])
 							}
 						}
 					} else {
 						// Loss of connection
-						debug.Dlog("[Server %v] lost connection with %v", rf.me, peer)
+						debug.Dlog("[Node %v] lost connection with %v", rf.me, peer)
 					}
 				}(server)
 			}
@@ -436,7 +420,7 @@ func (rf *KVnode) SendheartbeatToAll() {
 }
 
 func (rf *KVnode) SendNewCommandToAll() {
-	debug.Dlog("[Server %v] is sending new command to others", rf.me)
+	debug.Dlog("[Node %v] is sending new command to others", rf.me)
 	commitNum := 1
 	commitNumLock := sync.Mutex{}
 	oldCommit := rf.commitIndex
@@ -460,7 +444,7 @@ func (rf *KVnode) SendNewCommandToAll() {
 			}
 			copy(args.Entries, rf.logs[rf.nextIndex[peer]:])
 
-			debug.Dlog("[Server %v] the ENTRY with prevlogIndex %v for Server %v", rf.me, args.PrevlogIndex, peer)
+			debug.Dlog("[Node %v] the ENTRY with prevlogIndex %v for Node %v", rf.me, args.PrevlogIndex, peer)
 
 			reply, succ := rf.SendAppendEntries(peer, args)
 			if succ {
@@ -478,12 +462,12 @@ func (rf *KVnode) SendNewCommandToAll() {
 					rf.mu.Lock()
 					rf.matchIndex[peer] = args.PrevlogIndex + int32(len(args.Entries))
 					rf.nextIndex[peer] = rf.matchIndex[peer] + 1
-					debug.Dlog("[Server %v] update %v nextIndex and matchIndex to %v %v,and rf.commitIndex is %v，old is %v", rf.me, peer, rf.nextIndex[peer], rf.matchIndex[peer], rf.commitIndex, oldCommit)
+					debug.Dlog("[Node %v] update %v nextIndex and matchIndex to %v %v,and rf.commitIndex is %v，old is %v", rf.me, peer, rf.nextIndex[peer], rf.matchIndex[peer], rf.commitIndex, oldCommit)
 					commitNumLock.Lock()
 					commitNum++
 					if rf.commitIndex == oldCommit && commitNum >= (len(rf.peers)+1)/2 {
 						rf.commitIndex++
-						debug.Dlog("[Server %v] commit a new command with commitId %v: %+v", rf.me, rf.commitIndex, rf.logs[rf.commitIndex])
+						debug.Dlog("[Node %v] commit a new command with commitId %v: %+v", rf.me, rf.commitIndex, rf.logs[rf.commitIndex])
 						rf.apply()
 						rf.SendheartbeatToAll()
 						rf.heartbeat_timeout.Reset(20 * time.Millisecond)
@@ -493,11 +477,11 @@ func (rf *KVnode) SendNewCommandToAll() {
 				} else {
 					rf.mu.Lock()
 					rf.nextIndex[peer]--
-					debug.Dlog("[Server %v] update %v nextIndex to %v", rf.me, peer, rf.nextIndex[peer])
+					debug.Dlog("[Node %v] update %v nextIndex to %v", rf.me, peer, rf.nextIndex[peer])
 					rf.mu.Unlock()
 				}
 			} else {
-				debug.Dlog("[Server %v] lost the connection with %v", rf.me, peer)
+				debug.Dlog("[Node %v] lost the connection with %v", rf.me, peer)
 			}
 		}(server)
 	}
@@ -514,7 +498,7 @@ func (rf *KVnode) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
 	if rf.lastApplied == 0 {
 		return true
 	} else {
-		debug.Dlog("[Server %v] checking isn't logUptoDate: lastLogIndex is %v, lastLogTerm is %v", rf.me, lastLogIndex, lastLogTerm)
+		debug.Dlog("[Node %v] checking isn't logUptoDate: lastLogIndex is %v, lastLogTerm is %v", rf.me, lastLogIndex, lastLogTerm)
 		//if rf.logs[rf.lastApplied].Term > lastLogTerm || rf.lastApplied > lastLogIndex {
 		//	return false
 		//}
@@ -537,7 +521,7 @@ func (rf *KVnode) IsLeader() bool {
 func (rf *KVnode) apply() {
 	for rf.commitIndex > rf.lastApplied && rf.lastApplied+1 < int32(len(rf.logs)) {
 		rf.lastApplied++
-		debug.Dlog("[Server %v] is applying %v: %+v", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])
+		debug.Dlog("[Node %v] is applying %v: %+v", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])
 		op := rf.logs[rf.lastApplied].GetOp()
 		key := rf.logs[rf.lastApplied].GetKey()
 		value := rf.logs[rf.lastApplied].GetValue()
