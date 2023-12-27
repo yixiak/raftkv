@@ -57,9 +57,10 @@ type KVnode struct {
 }
 
 type ApplyMsg struct {
-	op    string
-	key   string
-	value int32
+	Op    string
+	Key   string
+	Value int32
+	Index int
 }
 
 // rpc server's interface
@@ -542,17 +543,20 @@ func (rf *KVnode) apply() {
 		value := rf.logs[rf.lastApplied].GetValue()
 
 		applymsg := ApplyMsg{
-			op:    op,
-			key:   key,
-			value: value,
+			Op:    op,
+			Key:   key,
+			Value: value,
+			Index: int(rf.lastApplied),
 		}
 		rf.applych <- applymsg
 	}
 }
 
-func (rf *KVnode) Exec(op string, key string, value int32) {
-
-	if rf.IsLeader() {
+func (rf *KVnode) Exec(op string, key string, value int32) (int, int, bool) {
+	index := -1
+	term := -1
+	isLeader := rf.IsLeader()
+	if isLeader {
 		rf.mu.Lock()
 		term := rf.currentTerm
 		index := int32(len(rf.logs))
@@ -566,4 +570,5 @@ func (rf *KVnode) Exec(op string, key string, value int32) {
 		rf.SendNewCommandToAll()
 		rf.mu.Unlock()
 	}
+	return index, term, isLeader
 }
