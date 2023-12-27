@@ -47,12 +47,19 @@ type KVnode struct {
 	election_timeout  *time.Timer
 	heartbeat_timeout *time.Timer
 
-	// kv storage in memory
-	storage map[string]int32
-	// Persistence path
-	persist string
+	// // kv storage in memory
+	// storage map[string]int32
+	// // Persistence path
+	// persist string
+	applych chan ApplyMsg
 
 	killed bool
+}
+
+type ApplyMsg struct {
+	op    string
+	key   string
+	value int32
 }
 
 // rpc server's interface
@@ -175,7 +182,7 @@ func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVo
 }
 
 // used to create a new server for Register
-func newKVServer(me int, peers []int, addrs []string, persist string) *KVnode {
+func NewKVnode(me int, peers []int, addrs []string, applych chan ApplyMsg) *KVnode {
 	//debug.Dlog("[Server %v] enter newKVServer", me)
 	iniEntry := &LogEntry{
 		Term:  0,
@@ -216,18 +223,19 @@ func newKVServer(me int, peers []int, addrs []string, persist string) *KVnode {
 		matchIndex:        make([]int32, len(peers)),
 		election_timeout:  time.NewTimer(RandElectionTimeout()),
 		heartbeat_timeout: time.NewTimer(20 * time.Millisecond),
-		persist:           persist,
-		storage:           make(map[string]int32, 10),
-		killed:            false,
+		// persist:           persist,
+		// storage:           make(map[string]int32, 10),
+		applych: applych,
+		killed:  false,
 	}
 
 	//go rf.ticker()
-	debug.Dlog("[Server %v] finished newKVServer", me)
+	debug.Dlog("[Server %v] finished newKVnode", me)
 	return rf
 }
 
 // connect with other
-func (rf *KVnode) connect() {
+func (rf *KVnode) Connect() {
 	//debug.Dlog("[Server %v] enter connect", rf.me)
 	//stubs := make([]*raftKVClient, len(peers))
 	for peer := range rf.peers {
@@ -521,7 +529,7 @@ func (rf *KVnode) isLogUptoDate(lastLogIndex int, lastLogTerm int) bool {
 	return true
 }
 
-func (rf *KVnode) isLeader() bool {
+func (rf *KVnode) IsLeader() bool {
 	return rf.state == Leader
 }
 
@@ -532,12 +540,30 @@ func (rf *KVnode) apply() {
 		op := rf.logs[rf.lastApplied].GetOp()
 		key := rf.logs[rf.lastApplied].GetKey()
 		value := rf.logs[rf.lastApplied].GetValue()
-		switch op {
-		case "insert":
-		case "update":
-			rf.storage[key] = value
-		case "remove":
-			delete(rf.storage, key)
+
+		applymsg := ApplyMsg{
+			op:    op,
+			key:   key,
+			value: value,
 		}
+		rf.applych <- applymsg
+	}
+}
+
+func (rf *KVnode) Exec(op string, key string, value int32) {
+
+	if rf.IsLeader() {
+		rf.mu.Lock()
+		term := rf.currentTerm
+		index := int32(len(rf.logs))
+		rf.logs = append(rf.logs, &LogEntry{
+			Term:  term,
+			Index: index,
+			Op:    op,
+			Key:   key,
+			Value: int32(value),
+		})
+		rf.SendNewCommandToAll()
+		rf.mu.Unlock()
 	}
 }

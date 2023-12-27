@@ -18,14 +18,14 @@ func TestMake(t *testing.T) {
 	peers[0] = 0
 	peers[0] = 1
 	peers[0] = 2
-	persist := "./temp"
+	//persist := "./temp"
 
 	grpcnode := make([]*grpc.Server, 3)
 	servers := make([]*KVnode, 3)
 	debug.Dlog("Testing Make:")
 	// should I make listeners here?
 	for index := 0; index < 3; index++ {
-		server := newKVServer(index, peers, addrs, persist)
+		server := NewKVnode(index, peers, addrs, nil)
 		lis, err := net.Listen("tcp", addrs[index])
 		if err != nil {
 			panic("listen failed")
@@ -39,7 +39,7 @@ func TestMake(t *testing.T) {
 
 	}
 	for index := 0; index < 3; index++ {
-		servers[index].connect()
+		servers[index].Connect()
 	}
 	time.Sleep(10 * time.Second)
 }
