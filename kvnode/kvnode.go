@@ -542,11 +542,11 @@ func (rf *KVnode) Exec(op string, key string, value int32) (int, int, bool) {
 	isLeader := rf.IsLeader()
 	if isLeader {
 		rf.mu.Lock()
-		term := rf.currentTerm
-		index := int32(len(rf.logs))
+		term = int(rf.currentTerm)
+		index = len(rf.logs)
 		rf.logs = append(rf.logs, &LogEntry{
-			Term:  term,
-			Index: index,
+			Term:  int32(term),
+			Index: int32(index),
 			Op:    op,
 			Key:   key,
 			Value: int32(value),

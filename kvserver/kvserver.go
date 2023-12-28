@@ -40,11 +40,13 @@ func NewKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 	applych := make(chan kvnode.ApplyMsg)
 	debug.Dlog("[Server %v] is making node", me)
 	inner := kvnode.NewKVnode(me, peers, addrs, applych)
+	chmap := make(map[int]chan OpMsg)
 	kvServer := &KVserver{
 		me:        int32(me),
 		node:      inner,
 		applychan: applych,
 		killed:    false,
+		chanmap:   chmap,
 	}
 	//go kvServer.ticker()
 
@@ -86,8 +88,23 @@ func (kv *KVserver) ticker() {
 		msg := <-kv.applychan
 		opmsg := kv.apply(&msg)
 		index := msg.Index
-		kv.chanmap[index] <- opmsg
+		ch := kv.getReplychan(index)
+		ch <- opmsg
+
 	}
+}
+
+// Only one server should send msg to Service
+// the other
+func (kv *KVserver) getReplychan(index int) chan OpMsg {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	if _, ok := kv.chanmap[index]; !ok {
+		// if the server doesn't need to send msg
+		// this chan will be cover.
+		kv.chanmap[index] = make(chan OpMsg)
+	}
+	return kv.chanmap[index]
 }
 
 func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
@@ -120,5 +137,6 @@ func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
 			opmsg.Msg = fmt.Sprintf("find fail: there is no %v", msg.Key)
 		}
 	}
+	debug.Dlog("[Server %v] finish apply", kv.me)
 	return *opmsg
 }
