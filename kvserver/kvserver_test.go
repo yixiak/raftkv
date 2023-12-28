@@ -60,51 +60,69 @@ func TestSendCommand(t *testing.T) {
 	value := int32(1)
 	for {
 		if servers[0].IsLeader() {
-			fmt.Printf("Server 0 is Leader\n")
 			servers[0].Exec(msgch, op, key, value)
 			break
 		} else if servers[1].IsLeader() {
-			fmt.Printf("Server 1 is Leader\n")
 			servers[1].Exec(msgch, op, key, value)
 			break
 		} else if servers[2].IsLeader() {
-			fmt.Printf("Server 2 is Leader\n")
 			servers[2].Exec(msgch, op, key, value)
 			break
 		}
 	}
-	outtime := time.NewTimer(1 * time.Second)
+	outtime := time.NewTimer(2 * time.Second)
 	select {
 	case msg := <-msgch:
 		if !msg.Succ {
-			t.Fatalf("Fail to apply")
+			t.Fatalf("Fail to apply. Err msg: %v", msg.Msg)
 		}
 		fmt.Printf("1. receive op msg:%+v\n", msg)
 	case <-outtime.C:
 		t.Fatalf("Exec out of time")
 	}
+	op = "find"
 	for {
 		if servers[0].IsLeader() {
-			fmt.Printf("Server 0 is Leader\n")
 			servers[0].Exec(msgch, op, key, value)
 			break
 		} else if servers[1].IsLeader() {
-			fmt.Printf("Server 1 is Leader\n")
 			servers[1].Exec(msgch, op, key, value)
 			break
 		} else if servers[2].IsLeader() {
-			fmt.Printf("Server 2 is Leader\n")
 			servers[2].Exec(msgch, op, key, value)
 			break
 		}
 	}
-	outtime.Reset(1 * time.Second)
+	outtime.Reset(2 * time.Second)
 	select {
 	case msg := <-msgch:
 		if !msg.Succ {
-			t.Fatalf("Fail to apply")
+			t.Fatalf("Fail to apply. Err msg: %v", msg.Msg)
 		}
 		fmt.Printf("2. receive op msg:%+v\n", msg)
+	case <-outtime.C:
+		t.Fatalf("Exec out of time")
+	}
+	op = "delete"
+	for {
+		if servers[0].IsLeader() {
+			servers[0].Exec(msgch, op, key, value)
+			break
+		} else if servers[1].IsLeader() {
+			servers[1].Exec(msgch, op, key, value)
+			break
+		} else if servers[2].IsLeader() {
+			servers[2].Exec(msgch, op, key, value)
+			break
+		}
+	}
+	outtime.Reset(2 * time.Second)
+	select {
+	case msg := <-msgch:
+		if !msg.Succ {
+			t.Fatalf("Fail to apply. Err msg: %v", msg.Msg)
+		}
+		fmt.Printf("3. receive op msg:%+v\n", msg)
 	case <-outtime.C:
 		t.Fatalf("Exec out of time")
 	}

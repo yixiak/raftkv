@@ -41,12 +41,14 @@ func NewKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 	debug.Dlog("[Server %v] is making node", me)
 	inner := kvnode.NewKVnode(me, peers, addrs, applych)
 	chmap := make(map[int]chan OpMsg)
+	storage := make(map[string]int)
 	kvServer := &KVserver{
 		me:        int32(me),
 		node:      inner,
 		applychan: applych,
 		killed:    false,
 		chanmap:   chmap,
+		storage:   storage,
 	}
 	//go kvServer.ticker()
 
@@ -90,7 +92,6 @@ func (kv *KVserver) ticker() {
 		index := msg.Index
 		ch := kv.getReplychan(index)
 		ch <- opmsg
-
 	}
 }
 
@@ -118,12 +119,17 @@ func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
 		Value: msg.Value,
 	}
 	switch msg.Op {
-	case "Put", "Update":
+	case "put", "update":
 		kv.storage[msg.Key] = int(msg.Value)
+		_, succ := kv.storage[msg.Key]
+		if succ {
+			debug.Dlog("[Server %v] %v the %v:%v successfully", kv.me, msg.Op, msg.Key, msg.Value)
+		}
 	case "remove":
 		_, succ := kv.storage[msg.Key]
 		if succ {
 			delete(kv.storage, msg.Key)
+			debug.Dlog("[Server %v] delete %v successfully", kv.me, msg.Key)
 		} else {
 			opmsg.Succ = false
 			opmsg.Msg = fmt.Sprintf("delete fail: there is no %v", msg.Key)
