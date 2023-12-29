@@ -34,7 +34,7 @@ func TestCreateServer(t *testing.T) {
 
 }
 
-func TestSendCommand(t *testing.T) {
+func TestSend3Command(t *testing.T) {
 	addrs := make([]string, 3)
 	peers := make([]int, 3)
 	addrs[0] = "127.0.0.1:10001"
