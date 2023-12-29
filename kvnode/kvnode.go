@@ -2,6 +2,7 @@ package kvnode
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"raftkv/debug"
 	"sync"
@@ -9,6 +10,7 @@ import (
 
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 )
 
 type State int
@@ -170,6 +172,9 @@ func (rf *KVnode) SendAppendEntries(server int, args *AppendEntriesArgs) (*Appen
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	reply, succ := (*rf.stubs[server]).AppendEntries(ctx, args)
+	if succ != nil {
+		fmt.Printf("rpc call AppendEntries failed: %v\n", succ)
+	}
 	return reply, succ == nil
 }
 func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
@@ -177,6 +182,17 @@ func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVo
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	reply, succ := (*rf.stubs[server]).RequestVote(ctx, args)
+	if succ != nil {
+		fmt.Printf("rpc call RequestVote failed: %v\n", succ)
+		// 	arr := strings.Split(rf.addrs[server], ":")
+		// 	cmd := exec.Command("telnet", arr[0], arr[1])
+		// 	output, err := cmd.Output()
+		// 	if err != nil {
+		// 		fmt.Println("ping ", rf.addrs[server], " err:", err)
+		// 	} else {
+		// 		fmt.Println(string(output))
+		// 	}
+	}
 	return reply, succ == nil
 }
 
@@ -227,7 +243,11 @@ func (rf *KVnode) Connect() {
 			continue
 		}
 		debug.Dlog("[Node %v] is connecting with %v in %v", rf.me, peer, rf.addrs[peer])
-		conn, err := grpc.Dial(rf.addrs[peer], grpc.WithTransportCredentials(insecure.NewCredentials()))
+		alive := keepalive.ClientParameters{
+			Time:    1 * time.Minute,
+			Timeout: 10 * time.Second,
+		}
+		conn, err := grpc.Dial(rf.addrs[peer], grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithKeepaliveParams(alive))
 		rf.conns[peer] = conn
 		if err != nil {
 			panic(err)
