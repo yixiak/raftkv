@@ -8,6 +8,7 @@ import (
 	"time"
 
 	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type State int
@@ -29,7 +30,7 @@ type KVnode struct {
 	// stubs is used to Calling service methods
 	peers []int
 	conns []*grpc.ClientConn
-	//stubs []*RaftKVClient
+	stubs []*RaftKVClient
 	addrs []string
 
 	state State
@@ -168,16 +169,14 @@ func (rf *KVnode) Operate(ctx context.Context, args *Operation) (*Opreturn, erro
 func (rf *KVnode) SendAppendEntries(server int, args *AppendEntriesArgs) (*AppendEntriesReply, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	stub := NewRaftKVClient(rf.conns[server])
-	reply, succ := stub.AppendEntries(ctx, args)
+	reply, succ := (*rf.stubs[server]).AppendEntries(ctx, args)
 	return reply, succ == nil
 }
 func (rf *KVnode) SendRequestVote(server int, args *RequestVoteArgs) (*RequestVoteReply, bool) {
 	debug.Dlog("[Node %v] is sending RequestVote to %v:%v", rf.me, server, rf.conns[server].Target())
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	stub := NewRaftKVClient(rf.conns[server])
-	reply, succ := stub.RequestVote(ctx, args)
+	reply, succ := (*rf.stubs[server]).RequestVote(ctx, args)
 	return reply, succ == nil
 }
 
@@ -190,17 +189,17 @@ func NewKVnode(me int, peers []int, addrs []string, applych chan ApplyMsg) *KVno
 	}
 	logs := make([]*LogEntry, 0)
 	logs = append(logs, iniEntry)
-
+	stubs := make([]*RaftKVClient, len(peers))
 	// connect to other servers
 	conns := make([]*grpc.ClientConn, len(peers))
 
 	rf := &KVnode{
-		me:    int32(me),
-		peers: peers,
-		addrs: addrs,
-		state: Follower,
-		logs:  logs,
-		//stubs:             stubs,
+		me:                int32(me),
+		peers:             peers,
+		addrs:             addrs,
+		state:             Follower,
+		logs:              logs,
+		stubs:             stubs,
 		conns:             conns,
 		currentTerm:       0,
 		votedFor:          -1,
@@ -228,13 +227,13 @@ func (rf *KVnode) Connect() {
 			continue
 		}
 		debug.Dlog("[Node %v] is connecting with %v in %v", rf.me, peer, rf.addrs[peer])
-		conn, err := grpc.Dial(rf.addrs[peer], grpc.WithInsecure())
+		conn, err := grpc.Dial(rf.addrs[peer], grpc.WithTransportCredentials(insecure.NewCredentials()))
 		rf.conns[peer] = conn
 		if err != nil {
 			panic(err)
 		}
-		// stub := raftKVClient(NewRaftKVClient(conn))
-		// stubs[peer] = &stub
+		stub := NewRaftKVClient(conn)
+		rf.stubs[peer] = &stub
 	}
 	time.Sleep(10 * time.Millisecond)
 	go rf.ticker()
