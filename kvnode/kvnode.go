@@ -540,7 +540,6 @@ func (rf *KVnode) IsLeader() bool {
 func (rf *KVnode) apply() {
 	for rf.commitIndex > rf.lastApplied && rf.lastApplied+1 < int32(len(rf.logs)) {
 		rf.lastApplied++
-		debug.Dlog("[Node %v] is applying %v: %+v", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])
 		op := rf.logs[rf.lastApplied].GetOp()
 		key := rf.logs[rf.lastApplied].GetKey()
 		value := rf.logs[rf.lastApplied].GetValue()
@@ -551,7 +550,9 @@ func (rf *KVnode) apply() {
 			Value: value,
 			Index: int(rf.lastApplied),
 		}
+		//debug.Dlog("[Node %v] is applying %v: %+v\n\t\t\t\tSending msg to applych", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])
 		rf.applych <- applymsg
+		//debug.Dlog("[Node %v] send msg to ch successfully", rf.me)
 	}
 }
 

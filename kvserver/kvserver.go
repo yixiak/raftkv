@@ -87,11 +87,15 @@ func (kv *KVserver) Exec(ch chan OpMsg, op string, key string, value int32) {
 func (kv *KVserver) ticker() {
 	for !kv.killed {
 		// get an apply msg
+		//debug.Dlog("[Server %v] is blocking for apply message from node", kv.me)
 		msg := <-kv.applychan
+		//debug.Dlog("[Server %v] receive apply message:%v from node", kv.me, msg.Index)
 		opmsg := kv.apply(&msg)
 		index := msg.Index
 		ch := kv.getReplychan(index)
-		ch <- opmsg
+		if ch != nil {
+			ch <- opmsg
+		}
 	}
 }
 
@@ -103,12 +107,13 @@ func (kv *KVserver) getReplychan(index int) chan OpMsg {
 	if _, ok := kv.chanmap[index]; !ok {
 		// if the server doesn't need to send msg
 		// this chan will be cover.
-		kv.chanmap[index] = make(chan OpMsg)
+		return nil
 	}
 	return kv.chanmap[index]
 }
 
 func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
+	debug.Dlog("[Server %v] is applying %v", kv.me, msg.Index)
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	opmsg := &OpMsg{
@@ -138,6 +143,7 @@ func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
 		value, succ := kv.storage[msg.Key]
 		if succ {
 			opmsg.Value = int32(value)
+			debug.Dlog("[Server %v] find %v successfully", kv.me, msg.Key)
 		} else {
 			opmsg.Succ = false
 			opmsg.Msg = fmt.Sprintf("find fail: there is no %v", msg.Key)
