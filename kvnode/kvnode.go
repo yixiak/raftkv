@@ -576,3 +576,13 @@ func (rf *KVnode) Exec(op string, key string, value int32) (int, int, bool) {
 	}
 	return index, term, isLeader
 }
+
+func (rf *KVnode) Close() error {
+	for i := range rf.conns {
+		err := rf.conns[i].Close()
+		if err != nil {
+			panic(err)
+		}
+	}
+	return nil
+}

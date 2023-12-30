@@ -11,13 +11,15 @@ import (
 )
 
 type KVserver struct {
-	mu        sync.Mutex
-	node      *kvnode.KVnode
-	me        int32
-	storage   map[string]int
-	applychan chan kvnode.ApplyMsg
-	chanmap   map[int]chan OpMsg
-	killed    bool
+	mu         sync.Mutex
+	node       *kvnode.KVnode
+	me         int32
+	storage    map[string]int
+	applychan  chan kvnode.ApplyMsg
+	chanmap    map[int]chan OpMsg
+	lis        net.Listener
+	grpcServer *grpc.Server
+	killed     bool
 }
 
 type OpMsg struct {
@@ -37,14 +39,7 @@ func NewKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 	inner := kvnode.NewKVnode(me, peers, addrs, applych)
 	chmap := make(map[int]chan OpMsg)
 	storage := make(map[string]int)
-	kvServer := &KVserver{
-		me:        int32(me),
-		node:      inner,
-		applychan: applych,
-		killed:    false,
-		chanmap:   chmap,
-		storage:   storage,
-	}
+
 	//go kvServer.ticker()
 
 	lis, err := net.Listen("tcp", addrs[me])
@@ -55,6 +50,16 @@ func NewKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 	kvnode.RegisterRaftKVServer(grpcSever, inner)
 	// should run at another thread
 	go grpcSever.Serve(lis)
+	kvServer := &KVserver{
+		me:         int32(me),
+		node:       inner,
+		applychan:  applych,
+		killed:     false,
+		chanmap:    chmap,
+		storage:    storage,
+		lis:        lis,
+		grpcServer: grpcSever,
+	}
 	return kvServer
 }
 
@@ -149,5 +154,14 @@ func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
 }
 
 func (kv *KVserver) Close() error {
-
+	kv.mu.Lock()
+	kv.killed = true
+	kv.mu.Unlock()
+	err := kv.node.Close()
+	if err != nil {
+		panic(err)
+	}
+	kv.grpcServer.Stop()
+	kv.lis.Close()
+	return nil
 }
