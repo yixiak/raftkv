@@ -94,7 +94,9 @@ func (kv *KVserver) ticker() {
 		index := msg.Index
 		ch := kv.getReplychan(index)
 		if ch != nil {
+			debug.Dlog("[Server %v] is sending msg to DBSevice", kv.me)
 			ch <- opmsg
+			debug.Dlog("[Server %v] finished sending msg to DBSevice", kv.me)
 		}
 	}
 }

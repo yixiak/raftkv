@@ -552,7 +552,7 @@ func (rf *KVnode) apply() {
 		}
 		//debug.Dlog("[Node %v] is applying %v: %+v\n\t\t\t\tSending msg to applych", rf.me, rf.lastApplied, rf.logs[rf.lastApplied])
 		rf.applych <- applymsg
-		//debug.Dlog("[Node %v] send msg to ch successfully", rf.me)
+		debug.Dlog("[Node %v] send msg to ch successfully with index:%v", rf.me, applymsg.Index)
 	}
 }
 
@@ -578,7 +578,22 @@ func (rf *KVnode) Exec(op string, key string, value int32) (int, int, bool) {
 }
 
 func (rf *KVnode) Close() error {
+	for {
+		rf.mu.Lock()
+		if int(rf.lastApplied) == int(rf.commitIndex) {
+			debug.Dlog("[Node %v] finished applying all committed logs", rf.me)
+			rf.election_timeout.Stop()
+			rf.heartbeat_timeout.Stop()
+			rf.mu.Unlock()
+			break
+		}
+		rf.mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+	}
 	for i := range rf.conns {
+		if int32(i) == rf.me {
+			continue
+		}
 		err := rf.conns[i].Close()
 		if err != nil {
 			panic(err)

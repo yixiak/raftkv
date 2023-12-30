@@ -2,8 +2,8 @@ package kvserver
 
 import (
 	"fmt"
+	"raftkv/debug"
 	"sync"
-	"time"
 )
 
 type DBService struct {
@@ -30,7 +30,7 @@ func Open() *DBService {
 		servers[i] = server
 	}
 	DB := &DBService{
-		clientnum: 3,
+		clientnum: 0,
 		servers:   servers,
 		closed:    false,
 	}
@@ -42,18 +42,17 @@ func Open() *DBService {
 
 func (db *DBService) Close() error {
 	// Wait for other operations to complete
+	fmt.Println("DBService is closing")
 	for {
 		db.mu.Lock()
 		if db.clientnum == 0 {
+			debug.Dlog("[DBService] can Close now")
+			db.closed = true
 			db.mu.Unlock()
 			break
 		}
 		db.mu.Unlock()
-		time.Sleep(1 * time.Millisecond)
 	}
-	db.mu.Lock()
-	db.closed = true
-	db.mu.Unlock()
 	for i := range db.servers {
 		err := db.servers[i].Close()
 		if err != nil {
@@ -65,21 +64,36 @@ func (db *DBService) Close() error {
 }
 
 func (db *DBService) Put(key string, value int) error {
+	debug.Dlog("[DBService] receive a put request")
 	channel := make(chan OpMsg)
-	for i := range db.servers {
-		if db.servers[i].IsLeader() {
-			db.mu.Lock()
-			db.clientnum++
-			db.mu.Unlock()
-			db.servers[i].Exec(channel, "put", key, int32(value))
+	find := false
+	for {
+		if find {
 			break
+		}
+		for i := range db.servers {
+			if db.servers[i].IsLeader() {
+				debug.Dlog("[DBService] find leader %v", i)
+				db.mu.Lock()
+				db.clientnum++
+				debug.Dlog("[DBService] clientnum is %v", db.clientnum)
+				db.mu.Unlock()
+				db.servers[i].Exec(channel, "put", key, int32(value))
+				find = true
+				break
+			}
 		}
 	}
 	msg := <-channel
 	db.mu.Lock()
 	db.clientnum--
+	debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 	db.mu.Unlock()
-	fmt.Println(msg.Msg)
+	if msg.Succ {
+		fmt.Println("DBService finish put operation")
+	} else {
+		fmt.Println(msg.Msg)
+	}
 	return nil
 }
 
@@ -89,6 +103,7 @@ func (db *DBService) Update(key string, value int) error {
 		if db.servers[i].IsLeader() {
 			db.mu.Lock()
 			db.clientnum++
+			debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 			db.mu.Unlock()
 			db.servers[i].Exec(channel, "update", key, int32(value))
 			break
@@ -97,6 +112,7 @@ func (db *DBService) Update(key string, value int) error {
 	msg := <-channel
 	db.mu.Lock()
 	db.clientnum--
+	debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 	db.mu.Unlock()
 	fmt.Println(msg.Msg)
 	return nil
@@ -108,6 +124,7 @@ func (db *DBService) Remove(key string) error {
 		if db.servers[i].IsLeader() {
 			db.mu.Lock()
 			db.clientnum++
+			debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 			db.mu.Unlock()
 			db.servers[i].Exec(channel, "remove", key, 0)
 			break
@@ -116,6 +133,7 @@ func (db *DBService) Remove(key string) error {
 	msg := <-channel
 	db.mu.Lock()
 	db.clientnum--
+	debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 	db.mu.Unlock()
 	fmt.Println(msg.Msg)
 	return nil
@@ -127,6 +145,7 @@ func (db *DBService) Get(key string) (int, error) {
 		if db.servers[i].IsLeader() {
 			db.mu.Lock()
 			db.clientnum++
+			debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 			db.mu.Unlock()
 			db.servers[i].Exec(channel, "get", key, 0)
 			break
@@ -135,7 +154,12 @@ func (db *DBService) Get(key string) (int, error) {
 	msg := <-channel
 	db.mu.Lock()
 	db.clientnum--
+	debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 	db.mu.Unlock()
-	fmt.Println(msg.Msg)
+	if !msg.Succ {
+		fmt.Println(msg.Msg)
+	} else {
+		fmt.Printf("DBService get the value of %v:%v\n", key, msg.Value)
+	}
 	return int(msg.Value), nil
 }
