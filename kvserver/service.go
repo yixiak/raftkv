@@ -98,14 +98,14 @@ func (db *DBService) Remove(key string) error {
 	return nil
 }
 
-func (db *DBService) Find(key string) (int, error) {
+func (db *DBService) Get(key string) (int, error) {
 	channel := make(chan OpMsg)
 	for i := range db.servers {
 		if db.servers[i].IsLeader() {
 			db.mu.Lock()
 			db.clientnum++
 			db.mu.Unlock()
-			db.servers[i].Exec(channel, "find", key, 0)
+			db.servers[i].Exec(channel, "get", key, 0)
 			break
 		}
 	}

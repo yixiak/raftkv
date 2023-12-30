@@ -134,16 +134,20 @@ func (kv *KVserver) apply(msg *kvnode.ApplyMsg) OpMsg {
 			opmsg.Succ = false
 			opmsg.Msg = fmt.Sprintf("delete fail: there is no %v", msg.Key)
 		}
-	case "find":
+	case "get":
 		value, succ := kv.storage[msg.Key]
 		if succ {
 			opmsg.Value = int32(value)
-			debug.Dlog("[Server %v] find %v successfully", kv.me, msg.Key)
+			debug.Dlog("[Server %v] get %v successfully", kv.me, msg.Key)
 		} else {
 			opmsg.Succ = false
-			opmsg.Msg = fmt.Sprintf("find fail: there is no %v", msg.Key)
+			opmsg.Msg = fmt.Sprintf("get fail: there is no %v", msg.Key)
 		}
 	}
 	debug.Dlog("[Server %v] finish apply", kv.me)
 	return *opmsg
+}
+
+func (kv *KVserver) Close() error {
+
 }
