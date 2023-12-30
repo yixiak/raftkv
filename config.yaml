@@ -1,0 +1,24 @@
+# use default config                - default
+# use a custom config in this file  - config
+mode: config
+
+serversNum: 3
+
+address:
+ - 127.0.0.1
+ - 127.0.0.1
+ - 127.0.0.1
+
+port:
+ - 10001
+ - 10002
+ - 10003
+
+persistPath:
+ - ./temp/temp1.json
+ - ./temp/temp2.json
+ - ./temp/temp3.json
+
+listenAddress:
+
+listenPort: 

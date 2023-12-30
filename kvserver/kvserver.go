@@ -178,7 +178,8 @@ func (kv *KVserver) persist() error {
 	if err != nil {
 		panic(err)
 	}
-	file, err := os.OpenFile(kv.filePath, os.O_RDWR|os.O_CREATE, 0666)
+	debug.Dlog("[Server %v] 's storage is %+v", kv.me, kv.storage)
+	file, err := os.OpenFile(kv.filePath, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0666)
 	if err != nil {
 		panic(err)
 	}
