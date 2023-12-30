@@ -17,16 +17,20 @@ func Open() *DBService {
 	// use 3 servers to test
 	addrs := make([]string, 3)
 	peers := make([]int, 3)
+	persists := make([]string, 3)
 	addrs[0] = "127.0.0.1:10001"
 	addrs[1] = "127.0.0.1:10002"
 	addrs[2] = "127.0.0.1:10003"
 	peers[0] = 0
 	peers[1] = 1
 	peers[2] = 2
+	persists[0] = "./temp/temp1.json"
+	persists[1] = "./temp/temp2.json"
+	persists[2] = "./temp/temp3.json"
 
 	servers := make([]*KVserver, 3)
 	for i := 0; i < 3; i++ {
-		server := NewKVServer(i, peers, addrs, "./temp")
+		server := NewKVServer(i, peers, addrs, persists[i])
 		servers[i] = server
 	}
 	DB := &DBService{

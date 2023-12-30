@@ -212,6 +212,8 @@ func TestServiceGet(t *testing.T) {
 	fmt.Println("Test Service begin")
 	db := Open()
 	db.Put("a", 1)
+	db.Put("b", 1)
+	db.Put("abc", 1)
 	value, err := db.Get("a")
 	if err != nil {
 		t.Fatal("put and then get fail")
@@ -219,5 +221,6 @@ func TestServiceGet(t *testing.T) {
 	if value != 1 {
 		t.Fatal("get a wrong value")
 	}
+	db.Remove("b")
 	db.Close()
 }

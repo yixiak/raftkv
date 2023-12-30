@@ -1,8 +1,10 @@
 package kvserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"raftkv/debug"
 	"raftkv/kvnode"
 	"sync"
@@ -19,6 +21,7 @@ type KVserver struct {
 	chanmap    map[int]chan OpMsg
 	lis        net.Listener
 	grpcServer *grpc.Server
+	filePath   string
 	killed     bool
 }
 
@@ -59,6 +62,7 @@ func NewKVServer(me int, peers []int, addrs []string, persist string) *KVserver 
 		storage:    storage,
 		lis:        lis,
 		grpcServer: grpcSever,
+		filePath:   persist,
 	}
 	return kvServer
 }
@@ -165,5 +169,19 @@ func (kv *KVserver) Close() error {
 	}
 	kv.grpcServer.Stop()
 	kv.lis.Close()
+	kv.persist()
+	return nil
+}
+
+func (kv *KVserver) persist() error {
+	bytes, err := json.Marshal(kv.storage)
+	if err != nil {
+		panic(err)
+	}
+	file, err := os.OpenFile(kv.filePath, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err)
+	}
+	file.Write(bytes)
 	return nil
 }
