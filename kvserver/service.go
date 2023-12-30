@@ -62,7 +62,7 @@ func Open() *DBService {
 	} else {
 		for i := 0; i < num; i++ {
 			peers[i] = i
-			addrs[i] = fmt.Sprintf(config.Address[i], ":", config.Port[i])
+			addrs[i] = fmt.Sprintf("%v:%v", config.Address[i], config.Port[i])
 			persists[i] = config.PersistPath[i]
 		}
 	}
