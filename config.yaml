@@ -15,9 +15,9 @@ port:
  - 10003
 
 persistPath:
- - ./temp/temp1.json
- - ./temp/temp2.json
- - ./temp/temp3.json
+ - temp/temp1.json
+ - temp/temp2.json
+ - temp/temp3.json
 
 listenAddress:
 

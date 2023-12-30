@@ -5,6 +5,7 @@ import (
 	"os"
 	"raftkv/debug"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -83,6 +84,8 @@ func Open() *DBService {
 }
 
 func (db *DBService) Close() error {
+	// avoid calling the close too quickly
+	time.Sleep(5 * time.Second)
 	// Wait for other operations to complete
 	fmt.Println("DBService is closing")
 	for {
@@ -141,14 +144,21 @@ func (db *DBService) Put(key string, value int) error {
 
 func (db *DBService) Update(key string, value int) error {
 	channel := make(chan OpMsg)
-	for i := range db.servers {
-		if db.servers[i].IsLeader() {
-			db.mu.Lock()
-			db.clientnum++
-			debug.Dlog("[DBService] clientnum is %v", db.clientnum)
-			db.mu.Unlock()
-			db.servers[i].Exec(channel, "update", key, int32(value))
+	find := false
+	for {
+		if find {
 			break
+		}
+		for i := range db.servers {
+			if db.servers[i].IsLeader() {
+				db.mu.Lock()
+				db.clientnum++
+				debug.Dlog("[DBService] clientnum is %v", db.clientnum)
+				db.mu.Unlock()
+				db.servers[i].Exec(channel, "update", key, int32(value))
+				find = true
+				break
+			}
 		}
 	}
 	msg := <-channel
@@ -156,20 +166,31 @@ func (db *DBService) Update(key string, value int) error {
 	db.clientnum--
 	debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 	db.mu.Unlock()
-	fmt.Println(msg.Msg)
+	if !msg.Succ {
+		fmt.Println(msg.Msg)
+	} else {
+		fmt.Println("DBService finish update operation")
+	}
 	return nil
 }
 
 func (db *DBService) Remove(key string) error {
 	channel := make(chan OpMsg)
-	for i := range db.servers {
-		if db.servers[i].IsLeader() {
-			db.mu.Lock()
-			db.clientnum++
-			debug.Dlog("[DBService] clientnum is %v", db.clientnum)
-			db.mu.Unlock()
-			db.servers[i].Exec(channel, "remove", key, 0)
+	find := false
+	for {
+		if find {
 			break
+		}
+		for i := range db.servers {
+			if db.servers[i].IsLeader() {
+				db.mu.Lock()
+				db.clientnum++
+				debug.Dlog("[DBService] clientnum is %v", db.clientnum)
+				db.mu.Unlock()
+				db.servers[i].Exec(channel, "remove", key, 0)
+				find = true
+				break
+			}
 		}
 	}
 	msg := <-channel
@@ -177,20 +198,31 @@ func (db *DBService) Remove(key string) error {
 	db.clientnum--
 	debug.Dlog("[DBService] clientnum is %v", db.clientnum)
 	db.mu.Unlock()
-	fmt.Println(msg.Msg)
+	if !msg.Succ {
+		fmt.Println(msg.Msg)
+	} else {
+		fmt.Println("DBService finish remove operation")
+	}
 	return nil
 }
 
 func (db *DBService) Get(key string) (int, error) {
 	channel := make(chan OpMsg)
-	for i := range db.servers {
-		if db.servers[i].IsLeader() {
-			db.mu.Lock()
-			db.clientnum++
-			debug.Dlog("[DBService] clientnum is %v", db.clientnum)
-			db.mu.Unlock()
-			db.servers[i].Exec(channel, "get", key, 0)
+	find := false
+	for {
+		if find {
 			break
+		}
+		for i := range db.servers {
+			if db.servers[i].IsLeader() {
+				db.mu.Lock()
+				db.clientnum++
+				debug.Dlog("[DBService] clientnum is %v", db.clientnum)
+				db.mu.Unlock()
+				db.servers[i].Exec(channel, "get", key, 0)
+				find = true
+				break
+			}
 		}
 	}
 	msg := <-channel
