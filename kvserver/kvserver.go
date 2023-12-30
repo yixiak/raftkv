@@ -184,5 +184,6 @@ func (kv *KVserver) persist() error {
 		panic(err)
 	}
 	file.Write(bytes)
+	file.Close()
 	return nil
 }
