@@ -41,5 +41,5 @@ func TestMake(t *testing.T) {
 	for index := 0; index < 3; index++ {
 		servers[index].Connect()
 	}
-	time.Sleep(10 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 }

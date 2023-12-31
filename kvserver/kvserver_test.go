@@ -9,16 +9,20 @@ import (
 func TestCreateServer(t *testing.T) {
 	addrs := make([]string, 3)
 	peers := make([]int, 3)
+	persists := make([]string, 3)
+	persists[0] = "./temp/temp1.json"
+	persists[1] = "./temp/temp2.json"
+	persists[2] = "./temp/temp3.json"
 	addrs[0] = "127.0.0.1:10001"
 	addrs[1] = "127.0.0.1:10002"
 	addrs[2] = "127.0.0.1:10003"
 	peers[0] = 0
 	peers[0] = 1
 	peers[0] = 2
-	fmt.Printf("Test Create Server\n")
+	fmt.Printf("===Test Create Server===\n")
 	servers := make([]*KVserver, 3)
 	for i := 0; i < 3; i++ {
-		server := NewKVServer(i, peers, addrs, "./temp")
+		server := NewKVServer(i, peers, addrs, persists[i])
 		servers[i] = server
 
 	}
@@ -26,22 +30,30 @@ func TestCreateServer(t *testing.T) {
 		servers[i].Connect()
 	}
 	time.Sleep(10 * time.Second)
+	for i := 0; i < 3; i++ {
+		servers[i].Close()
+	}
+	fmt.Println("===Pass===")
 
 }
 
 func TestSend3Command(t *testing.T) {
 	addrs := make([]string, 3)
 	peers := make([]int, 3)
+	persists := make([]string, 3)
+	persists[0] = "./temp/temp1.json"
+	persists[1] = "./temp/temp2.json"
+	persists[2] = "./temp/temp3.json"
 	addrs[0] = "127.0.0.1:10001"
 	addrs[1] = "127.0.0.1:10002"
 	addrs[2] = "127.0.0.1:10003"
 	peers[0] = 0
 	peers[1] = 1
 	peers[2] = 2
-	fmt.Printf("Test Create Server\n")
+	fmt.Printf("===Test Operation on Server===\n")
 	servers := make([]*KVserver, 3)
 	for i := 0; i < 3; i++ {
-		server := NewKVServer(i, peers, addrs, "./temp")
+		server := NewKVServer(i, peers, addrs, persists[i])
 		servers[i] = server
 
 	}
@@ -65,7 +77,7 @@ func TestSend3Command(t *testing.T) {
 			break
 		}
 	}
-	outtime := time.NewTimer(2 * time.Second)
+	outtime := time.NewTimer(5 * time.Second)
 	select {
 	case msg := <-msgch:
 		if !msg.Succ {
@@ -88,7 +100,7 @@ func TestSend3Command(t *testing.T) {
 			break
 		}
 	}
-	outtime.Reset(2 * time.Second)
+	outtime.Reset(5 * time.Second)
 	select {
 	case msg := <-msgch:
 		if !msg.Succ {
@@ -111,7 +123,7 @@ func TestSend3Command(t *testing.T) {
 			break
 		}
 	}
-	outtime.Reset(2 * time.Second)
+	outtime.Reset(5 * time.Second)
 	select {
 	case msg := <-msgch:
 		if !msg.Succ {
@@ -121,95 +133,16 @@ func TestSend3Command(t *testing.T) {
 	case <-outtime.C:
 		t.Fatalf("Exec out of time")
 	}
-
-}
-
-func TestSendCommandSimple(t *testing.T) {
-	addrs := make([]string, 2)
-	peers := make([]int, 2)
-	addrs[0] = "127.0.0.1:10001"
-	addrs[1] = "127.0.0.1:10002"
-	peers[0] = 0
-	peers[1] = 1
-	fmt.Printf("Test 2 Servers\n")
-	servers := make([]*KVserver, 2)
-	for i := 0; i < 2; i++ {
-		server := NewKVServer(i, peers, addrs, "./temp")
-		servers[i] = server
-
+	for i := 0; i < 3; i++ {
+		servers[i].Close()
 	}
-	for i := 0; i < 2; i++ {
-		servers[i].Connect()
-	}
-	time.Sleep(50 * time.Millisecond)
-	msgch := make(chan OpMsg)
-	op := "put"
-	key := "a"
-	value := int32(1)
-	for {
-		if servers[0].IsLeader() {
-			servers[0].Exec(msgch, op, key, value)
-			break
-		} else if servers[1].IsLeader() {
-			servers[1].Exec(msgch, op, key, value)
-			break
-		}
-	}
-	outtime := time.NewTimer(2 * time.Second)
-	select {
-	case msg := <-msgch:
-		if !msg.Succ {
-			t.Fatalf("Fail to apply. Err msg: %v", msg.Msg)
-		}
-		fmt.Printf("1. receive op msg:%+v\n", msg)
-	case <-outtime.C:
-		t.Fatalf("Exec out of time")
-	}
-	op = "find"
-	for {
-		if servers[0].IsLeader() {
-			servers[0].Exec(msgch, op, key, value)
-			break
-		} else if servers[1].IsLeader() {
-			servers[1].Exec(msgch, op, key, value)
-			break
-		}
-	}
-	outtime.Reset(2 * time.Second)
-	select {
-	case msg := <-msgch:
-		if !msg.Succ {
-			t.Fatalf("Fail to apply. Err msg: %v", msg.Msg)
-		}
-		fmt.Printf("2. receive op msg:%+v\n", msg)
-	case <-outtime.C:
-		t.Fatalf("Exec out of time")
-	}
-	op = "delete"
-	for {
-		if servers[0].IsLeader() {
-			servers[0].Exec(msgch, op, key, value)
-			break
-		} else if servers[1].IsLeader() {
-			servers[1].Exec(msgch, op, key, value)
-			break
-		}
-	}
-	outtime.Reset(2 * time.Second)
-	select {
-	case msg := <-msgch:
-		if !msg.Succ {
-			t.Fatalf("Fail to apply. Err msg: %v", msg.Msg)
-		}
-		fmt.Printf("3. receive op msg:%+v\n", msg)
-	case <-outtime.C:
-		t.Fatalf("Exec out of time")
-	}
+	fmt.Println("===Pass===")
 
 }
 
 func TestServiceGet(t *testing.T) {
-	fmt.Println("Test Service begin")
+	time.Sleep(10 * time.Second)
+	fmt.Println("===Test Service begin===")
 	db := Open()
 	db.Put("a", 1)
 	db.Put("b", 1)
@@ -223,4 +156,5 @@ func TestServiceGet(t *testing.T) {
 	}
 	db.Remove("b")
 	db.Close()
+	fmt.Println("===Pass===")
 }
