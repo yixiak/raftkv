@@ -1,12 +1,15 @@
 package skiplist
 
 import (
+	"fmt"
+	"log"
 	"math/rand/v2"
+	"os"
 	"sync"
 )
 
 const (
-	MAX_LEVEL = 8
+	MAX_LEVEL = 18
 )
 
 type ListNode struct {
@@ -152,4 +155,21 @@ func (list *SkipList) randomLevel() int {
 		level++
 	}
 	return level
+}
+
+func (list *SkipList) Store() {
+	list.mu.Lock()
+	defer list.mu.Unlock()
+
+	f, err := os.Create(list.persist_file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	node := list.Head.Next[0]
+	for node != nil {
+		fmt.Fprintf(f, "%d %s\n", node.Key, node.Val)
+		node = node.Next[0]
+	}
 }

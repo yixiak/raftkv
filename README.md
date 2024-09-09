@@ -63,3 +63,19 @@ func randOp(db *kvserver.DBService) {
 }
 
 ```
+
+---
+
+## SkipList
+
+
+### Performance
+MAX-LEVEL = 18
+```shell
+insert 100000 items cost 43 ms with 1 goroutine
+search 100000 items cost 43 ms with 1 goroutine
+insert 500000 items cost 462 ms with 1 goroutine
+search 500000 items cost 579 ms with 1 goroutine
+insert 1000000 items cost 1553 ms with 1 goroutine
+search 1000000 items cost 1819 ms with 1 goroutine
+```
